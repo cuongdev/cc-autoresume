@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use crate::Runner;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct SessionPreset {
@@ -57,50 +56,61 @@ fn jsonl_files(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// Discover sessions whose transcript was modified within `window_secs` of `now`,
-/// newest first, annotated with live/pending/preset flags.
+/// Discover sessions whose transcript mtime is within `window_secs` of `now`,
+/// newest first, capped at `cap`. `live` = written within `live_window_secs`.
+/// Cheap: only stats files, reads ≤10 lines per kept session for cwd, no lsof.
 pub fn discover(projects_dir: &Path, presets_path: &Path, pending_dir: &Path,
-                now: i64, window_secs: i64, runner: &dyn Runner,
-                which: &dyn Fn(&str) -> Option<String>) -> Vec<SessionInfo> {
+                now: i64, window_secs: i64, cap: usize, live_window_secs: i64) -> Vec<SessionInfo> {
     let presets = presets_load(presets_path);
-    let mut out = vec![];
+    let mut entries: Vec<(PathBuf, i64)> = vec![];
     for path in jsonl_files(projects_dir) {
         let Ok(meta) = std::fs::metadata(&path) else { continue };
         let mtime = meta.modified().ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| d.as_secs() as i64).unwrap_or(0);
         if (now - mtime).abs() > window_secs { continue; }
+        entries.push((path, mtime));
+    }
+    entries.sort_by(|a, b| b.1.cmp(&a.1));
+    entries.truncate(cap);
+    let mut out = vec![];
+    for (path, mtime) in entries {
         let sid = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
         if sid.is_empty() { continue; }
-        let cwd = crate::detect::resolve_cwd(&path);
-        let live = crate::resume::is_session_live(path.to_str().unwrap_or(""), runner, which);
+        let cwd = cwd_fast(&path);
+        let live = (now - mtime).abs() < live_window_secs;
         let pending = crate::pending::read(pending_dir, &sid).is_some();
         let preset = presets.get(&sid).cloned();
         out.push(SessionInfo {
-            session_id: sid,
-            cwd,
-            last_activity_epoch: mtime,
-            live,
-            pending,
+            session_id: sid, cwd, last_activity_epoch: mtime, live, pending,
             has_preset: preset.is_some(),
             preset_message: preset.as_ref().and_then(|p| p.message.clone()),
             preset_mode: preset.as_ref().and_then(|p| p.mode.clone()),
         });
     }
-    out.sort_by(|a, b| b.last_activity_epoch.cmp(&a.last_activity_epoch));
     out
+}
+
+/// Read cwd from the first ~10 JSONL lines (cheap; avoids reading huge transcripts).
+fn cwd_fast(path: &Path) -> Option<String> {
+    use std::io::{BufRead, BufReader};
+    let f = std::fs::File::open(path).ok()?;
+    for line in BufReader::new(f).lines().take(10).map_while(Result::ok) {
+        if let Ok(o) = serde_json::from_str::<serde_json::Value>(&line) {
+            if let Some(c) = o.get("cwd").and_then(|c| c.as_str()) { return Some(c.to_string()); }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::CmdOut;
-    use std::cell::RefCell;
-    struct Fake { live: bool, calls: RefCell<u32> }
-    impl Runner for Fake { fn run(&self, _a: &[String], _c: Option<&str>) -> CmdOut {
-        *self.calls.borrow_mut() += 1;
-        CmdOut { stdout: if self.live { "123\n".into() } else { String::new() }, ..Default::default() } } }
-    fn lsof_yes(n: &str) -> Option<String> { if n == "lsof" { Some("lsof".into()) } else { None } }
+
+    fn mtime_of(p: &std::path::Path) -> i64 {
+        std::fs::metadata(p).unwrap().modified().unwrap()
+            .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64
+    }
 
     #[test]
     fn presets_roundtrip_and_upsert() {
@@ -117,23 +127,25 @@ mod tests {
         assert_eq!(preset_for(&p, "s1"), SessionPreset::default());
     }
     #[test]
-    fn discover_includes_recent_with_flags() {
+    fn discover_recent_live_and_flags() {
         let proj = tempfile::tempdir().unwrap();
         let pend = tempfile::tempdir().unwrap();
         let pres = proj.path().join("sessions.json");
         std::fs::create_dir_all(proj.path().join("p")).unwrap();
-        std::fs::write(proj.path().join("p/abc123.jsonl"),
-            "{\"type\":\"user\",\"cwd\":\"/work\",\"message\":{\"content\":\"hi\"}}\n").unwrap();
+        let fp = proj.path().join("p/abc123.jsonl");
+        std::fs::write(&fp, "{\"type\":\"user\",\"cwd\":\"/work\",\"message\":{\"content\":\"hi\"}}\n").unwrap();
         upsert_preset(&pres, "abc123", Some("go".into()), None);
-        let f = Fake { live: true, calls: RefCell::new(0) };
-        let got = discover(proj.path(), &pres, pend.path(), 1_000_000_000, i64::MAX, &f, &lsof_yes);
+        let m = mtime_of(&fp);
+        let got = discover(proj.path(), &pres, pend.path(), m + 5, i64::MAX, 60, 120);
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].session_id, "abc123");
         assert_eq!(got[0].cwd.as_deref(), Some("/work"));
-        assert!(got[0].live);
+        assert!(got[0].live);                         // age 5s < 120
         assert!(got[0].has_preset);
         assert_eq!(got[0].preset_message.as_deref(), Some("go"));
         assert!(!got[0].pending);
+        let got2 = discover(proj.path(), &pres, pend.path(), m + 300, i64::MAX, 60, 120);
+        assert!(!got2[0].live);                        // age 300s > 120
     }
     #[test]
     fn discover_excludes_outside_window() {
@@ -142,8 +154,17 @@ mod tests {
         let pres = proj.path().join("sessions.json");
         std::fs::create_dir_all(proj.path().join("p")).unwrap();
         std::fs::write(proj.path().join("p/old.jsonl"), "{}\n").unwrap();
-        let f = Fake { live: false, calls: RefCell::new(0) };
-        let got = discover(proj.path(), &pres, pend.path(), 1_000_000_000, -1, &f, &lsof_yes);
+        let got = discover(proj.path(), &pres, pend.path(), 1_000_000_000, -1, 60, 120);
         assert!(got.is_empty());
+    }
+    #[test]
+    fn discover_caps_results() {
+        let proj = tempfile::tempdir().unwrap();
+        let pend = tempfile::tempdir().unwrap();
+        let pres = proj.path().join("sessions.json");
+        std::fs::create_dir_all(proj.path().join("p")).unwrap();
+        for i in 0..5 { std::fs::write(proj.path().join(format!("p/s{i}.jsonl")), "{}\n").unwrap(); }
+        let got = discover(proj.path(), &pres, pend.path(), mtime_of(&proj.path().join("p/s0.jsonl")) + 1, i64::MAX, 2, 120);
+        assert_eq!(got.len(), 2);
     }
 }

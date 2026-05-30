@@ -106,9 +106,13 @@ pub async fn open_terminal(State(s): State<AppState>, axum::extract::Path(id): a
 fn shell_quote(s: &str) -> String { s.replace('\\', "\\\\").replace('"', "\\\"") }
 
 pub async fn list_sessions(State(s): State<AppState>) -> impl IntoResponse {
-    let now = chrono::Utc::now().timestamp();
-    let list = sessions::discover(&s.projects_dir, &s.base.join("sessions.json"),
-        &s.pending_dir(), now, 86_400, s.runner.as_ref(), &crate::scheduler::which_path);
+    let projects = s.projects_dir.clone();
+    let presets = s.base.join("sessions.json");
+    let pend = s.pending_dir();
+    let list = tokio::task::spawn_blocking(move || {
+        let now = chrono::Utc::now().timestamp();
+        sessions::discover(&projects, &presets, &pend, now, 86_400, 60, 120)
+    }).await.unwrap_or_default();
     let count = list.len();
     Json(serde_json::json!({ "sessions": list, "count": count }))
 }
