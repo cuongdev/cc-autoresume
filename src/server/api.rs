@@ -95,7 +95,22 @@ pub async fn fire_pending(State(s): State<AppState>, axum::extract::Path(id): ax
     StatusCode::OK
 }
 
-pub async fn open_terminal(State(_s): State<AppState>) -> impl IntoResponse { StatusCode::OK }
+pub async fn open_terminal(State(s): State<AppState>, axum::extract::Path(id): axum::extract::Path<String>) -> impl IntoResponse {
+    let Some(rec) = pending::read(&s.pending_dir(), &id).or_else(|| {
+        stats::Stats::load(&s.stats_path()).recent.into_iter()
+            .find(|r| r.session_id == id)
+            .map(|r| pending::Pending { session_id: r.session_id, cwd: r.cwd, transcript_path: r.transcript_path,
+                reset_str: String::new(), fire_at: 0, message: String::new(), armed_at: 0, cancelled: false, confirmed: true, attempts: 0 })
+    }) else { return StatusCode::NOT_FOUND; };
+    let cwd = rec.cwd.unwrap_or_else(|| ".".into());
+    let script = format!(
+        "tell application \"Terminal\" to do script \"cd {} && claude --resume {}\"",
+        shell_quote(&cwd), &rec.session_id);
+    let out = s.runner.run(&["osascript".into(), "-e".into(), script], None);
+    if out.code == 0 { StatusCode::OK } else { StatusCode::INTERNAL_SERVER_ERROR }
+}
+
+fn shell_quote(s: &str) -> String { s.replace('\\', "\\\\").replace('"', "\\\"") }
 
 #[derive(serde::Serialize)]
 pub struct TokenResp { pub token: String }
@@ -223,5 +238,30 @@ mod tests {
         let res = app.oneshot(Request::builder().uri("/api/state")
             .header("authorization", format!("Bearer {t}")).body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn open_terminal_invokes_osascript() {
+        use crate::{CmdOut, Runner};
+        use std::sync::{Arc, Mutex};
+        struct Rec(Mutex<Vec<Vec<String>>>);
+        impl Runner for Rec { fn run(&self, a: &[String], _c: Option<&str>) -> CmdOut { self.0.lock().unwrap().push(a.to_vec()); CmdOut { code: 0, ..Default::default() } } }
+        let base = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let mut cfg = crate::config::Config::default(); cfg.token = "tk".into();
+        cfg.save(&base.path().join("config.json")).unwrap();
+        seed(base.path());
+        let rec = Arc::new(Rec(Mutex::new(vec![])));
+        let state = crate::server::AppState {
+            base: base.path().into(), home: home.path().into(), projects_dir: home.path().join(".claude/projects"),
+            runner: rec.clone(), status: Arc::new(tokio::sync::RwLock::new(crate::server::WatcherStatus::default())),
+        };
+        let app = build_router(state);
+        let res = app.oneshot(Request::builder().method("POST").uri("/api/session/deadbeef/open")
+            .header("authorization", "Bearer tk").body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let calls = rec.0.lock().unwrap();
+        assert_eq!(calls[0][0], "osascript");
+        assert!(calls[0][2].contains("claude --resume deadbeef"));
     }
 }
