@@ -43,6 +43,8 @@ pub fn build_router(state: AppState) -> axum::Router {
         .route("/api/pending/:id/cancel", post(api::cancel_pending))
         .route("/api/pending/:id/arm", post(api::arm_pending))
         .route("/api/pending/:id/fire", post(api::fire_pending))
+        .route("/api/sessions", get(api::list_sessions))
+        .route("/api/session/:id/preset", post(api::set_preset))
         .route("/api/session/:id/open", post(api::open_terminal))
         .route("/api/session/:id/messages", get(api::session_messages))
         .route("/api/session/:id/stream", get(sse::session_stream))

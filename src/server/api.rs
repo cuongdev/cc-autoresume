@@ -1,5 +1,5 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use crate::{account, config::Config, pending, stats, server::AppState};
+use crate::{account, config::Config, pending, sessions, stats, server::AppState};
 use chrono::Utc;
 use crate::{resume, scheduler, transcript};
 
@@ -104,6 +104,36 @@ pub async fn open_terminal(State(s): State<AppState>, axum::extract::Path(id): a
 }
 
 fn shell_quote(s: &str) -> String { s.replace('\\', "\\\\").replace('"', "\\\"") }
+
+pub async fn list_sessions(State(s): State<AppState>) -> impl IntoResponse {
+    let now = chrono::Utc::now().timestamp();
+    let list = sessions::discover(&s.projects_dir, &s.base.join("sessions.json"),
+        &s.pending_dir(), now, 86_400, s.runner.as_ref(), &crate::scheduler::which_path);
+    let count = list.len();
+    Json(serde_json::json!({ "sessions": list, "count": count }))
+}
+
+#[derive(serde::Deserialize)]
+pub struct PresetBody { #[serde(default)] pub message: Option<String>, #[serde(default)] pub mode: Option<String> }
+
+pub async fn set_preset(State(s): State<AppState>, axum::extract::Path(id): axum::extract::Path<String>,
+                        Json(b): Json<PresetBody>) -> impl IntoResponse {
+    if let Some(ref m) = b.mode {
+        if !["auto", "ask", "off", ""].contains(&m.as_str()) { return StatusCode::BAD_REQUEST; }
+    }
+    sessions::upsert_preset(&s.base.join("sessions.json"), &id, b.message.clone(), b.mode.clone());
+    if let Some(mut rec) = pending::read(&s.pending_dir(), &id) {
+        if let Some(msg) = &b.message { if !msg.is_empty() { rec.message = msg.clone(); } }
+        match b.mode.as_deref() {
+            Some("auto") => { rec.confirmed = true; rec.cancelled = false; }
+            Some("ask")  => { rec.confirmed = false; }
+            Some("off")  => { rec.cancelled = true; }
+            _ => {}
+        }
+        let _ = pending::write(&s.pending_dir(), &rec);
+    }
+    StatusCode::OK
+}
 
 #[derive(serde::Deserialize)]
 pub struct QrQ { pub data: String }
@@ -319,6 +349,53 @@ mod tests {
         assert!(res.headers().get("content-type").unwrap().to_str().unwrap().contains("image/svg+xml"));
         let body = res.into_body().collect().await.unwrap().to_bytes();
         assert!(String::from_utf8_lossy(&body).contains("<svg"));
+    }
+
+    #[tokio::test]
+    async fn list_sessions_returns_array() {
+        let (base, home, t) = setup();
+        std::fs::create_dir_all(home.path().join(".claude/projects/p")).unwrap();
+        std::fs::write(home.path().join(".claude/projects/p/zz.jsonl"),
+            "{\"type\":\"user\",\"cwd\":\"/w\",\"message\":{\"content\":\"x\"}}\n").unwrap();
+        let app = build_router(test_state(base.path().into(), home.path().into()));
+        let res = app.oneshot(Request::builder().uri("/api/sessions")
+            .header("authorization", format!("Bearer {t}")).body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body = res.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(v["sessions"].is_array());
+        assert_eq!(v["count"], v["sessions"].as_array().unwrap().len());
+    }
+
+    #[tokio::test]
+    async fn set_preset_persists_and_validates() {
+        let (base, home, t) = setup();
+        let app = build_router(test_state(base.path().into(), home.path().into()));
+        let res = app.clone().oneshot(Request::builder().method("POST").uri("/api/session/s1/preset")
+            .header("authorization", format!("Bearer {t}")).header("content-type","application/json")
+            .body(Body::from(r#"{"mode":"bogus"}"#)).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        let res = app.oneshot(Request::builder().method("POST").uri("/api/session/s1/preset")
+            .header("authorization", format!("Bearer {t}")).header("content-type","application/json")
+            .body(Body::from(r#"{"message":"do X","mode":"ask"}"#)).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let pr = crate::sessions::preset_for(&base.path().join("sessions.json"), "s1");
+        assert_eq!(pr.message.as_deref(), Some("do X"));
+        assert_eq!(pr.mode.as_deref(), Some("ask"));
+    }
+
+    #[tokio::test]
+    async fn set_preset_updates_live_pending() {
+        let (base, home, t) = setup();
+        seed(base.path());
+        let app = build_router(test_state(base.path().into(), home.path().into()));
+        let res = app.oneshot(Request::builder().method("POST").uri("/api/session/deadbeef/preset")
+            .header("authorization", format!("Bearer {t}")).header("content-type","application/json")
+            .body(Body::from(r#"{"message":"live update","mode":"auto"}"#)).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let rec = pending::read(&base.path().join("pending"), "deadbeef").unwrap();
+        assert_eq!(rec.message, "live update");
+        assert!(rec.confirmed);
     }
 
     #[tokio::test]
