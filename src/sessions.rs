@@ -115,10 +115,8 @@ fn is_noise_title(text: &str) -> bool {
     let lower = t.to_lowercase();
     lower.contains("hit your limit")
         || lower.contains("hit your session limit")
-        || t.starts_with("<local-command-caveat")
-        || t.starts_with("<command-name")
-        || t.starts_with("<command-message")
-        || t.starts_with("<command-args")
+        || t.starts_with("<local-command-")
+        || t.starts_with("<command-")
         || t.starts_with("<bash-")
         || t.starts_with("<system-reminder")
         || t.starts_with("Caveat:")
@@ -219,6 +217,7 @@ mod tests {
     fn is_noise_title_matches_synthetic_lines() {
         assert!(is_noise_title("⎿ You've hit your session limit · resets 2:30am"));
         assert!(is_noise_title("<local-command-caveat>x"));
+        assert!(is_noise_title("<local-command-stdout>Bye!</local-command-stdout>"));
         assert!(is_noise_title("Caveat: blah"));
         assert!(!is_noise_title("Build the billing API"));
     }
