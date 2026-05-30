@@ -418,7 +418,7 @@ function relTime(epoch){
   if (s < 60) return s+'s'; if (s < 3600) return Math.floor(s/60)+'m';
   if (s < 86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d';
 }
-let SESSIONS = [];
+let SESSIONS = []; let activeExpanded = false;
 async function loadSessions(){
   try { const r = await api('/api/sessions'); if(!r.ok) return; const d = await r.json();
     SESSIONS = d.sessions || []; renderActive(); } catch(e){}
@@ -426,7 +426,9 @@ async function loadSessions(){
 function renderActive(){
   const g = document.getElementById('activeGrid'); if(!g) return;
   document.getElementById('activeCount').textContent = SESSIONS.length;
-  g.innerHTML = SESSIONS.map(s=>{
+  const LIMIT = 5;
+  const list = activeExpanded ? SESSIONS : SESSIONS.slice(0, LIMIT);
+  g.innerHTML = list.map(s=>{
     const short = s.sessionId.slice(0,8);
     const dot = s.live ? '<span class="dot" style="width:8px;height:8px"></span>' : '';
     const badges = (s.hasPreset ? `<span class="pill armed">preset</span>` : '') + (s.pending ? `<span class="pill ask">pending</span>` : '');
@@ -435,8 +437,16 @@ function renderActive(){
       ${badges}<span class="meta">${t('lastActive')} ${relTime(s.lastActivityEpoch)}</span>
       <span class="view-hint" style="opacity:.6">→</span></div>`;
   }).join('');
+  if (SESSIONS.length > LIMIT) {
+    const more = SESSIONS.length - LIMIT;
+    const label = activeExpanded ? (lang==='vi' ? 'Thu gọn' : 'Show less')
+                                 : (lang==='vi' ? `Xem thêm ${more}` : `Show ${more} more`);
+    g.insertAdjacentHTML('beforeend',
+      `<button class="btn" style="align-self:center;margin-top:2px" onclick="toggleActive()">${label}</button>`);
+  }
   bindTips();
 }
+function toggleActive(){ activeExpanded = !activeExpanded; renderActive(); }
 function setModeSeg(mode){
   document.querySelectorAll('#d-mode button').forEach(b=>b.classList.toggle('on', (b.dataset.pm||'')===(mode||'')));
 }
