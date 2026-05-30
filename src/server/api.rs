@@ -91,14 +91,21 @@ pub async fn fire_pending(State(s): State<AppState>, axum::extract::Path(id): ax
 pub async fn open_terminal(State(s): State<AppState>, axum::extract::Path(id): axum::extract::Path<String>) -> impl IntoResponse {
     let Some(tp) = find_transcript(&s, &id) else { return StatusCode::NOT_FOUND; };
     let cwd = crate::detect::resolve_cwd(&tp).unwrap_or_else(|| ".".into());
-    let script = format!(
-        "tell application \"Terminal\" to do script \"cd {} && claude --resume {}\"",
-        shell_quote(&cwd), &id);
-    let out = s.runner.run(&["osascript".into(), "-e".into(), script], None);
+    // Write a .command script and `open` it. This launches Terminal WITHOUT needing
+    // Automation (AppleEvent) permission, which a background LaunchAgent can't obtain.
+    let body = format!("#!/bin/bash\ncd {} && claude --resume {}\n", sh_quote(&cwd), id);
+    let safe_id: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').take(36).collect();
+    let path = std::env::temp_dir().join(format!("cc-autoresume-{safe_id}.command"));
+    if std::fs::write(&path, body).is_err() { return StatusCode::INTERNAL_SERVER_ERROR; }
+    #[cfg(unix)]
+    { use std::os::unix::fs::PermissionsExt;
+      let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)); }
+    let out = s.runner.run(&["open".into(), path.to_string_lossy().into_owned()], None);
     if out.code == 0 { StatusCode::OK } else { StatusCode::INTERNAL_SERVER_ERROR }
 }
 
-fn shell_quote(s: &str) -> String { s.replace('\\', "\\\\").replace('"', "\\\"") }
+/// Single-quote a string for safe interpolation into a bash script.
+fn sh_quote(s: &str) -> String { format!("'{}'", s.replace('\'', "'\\''")) }
 
 pub async fn list_sessions(State(s): State<AppState>) -> impl IntoResponse {
     let projects = s.projects_dir.clone();
@@ -511,7 +518,10 @@ mod tests {
             .header("authorization", "Bearer tk").body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
         let calls = rec.0.lock().unwrap();
-        assert_eq!(calls[0][0], "osascript");
-        assert!(calls[0][2].contains("claude --resume deadbeef"));
+        assert_eq!(calls[0][0], "open");                                   // launches via `open`, not osascript
+        let cmd_file = &calls[0][1];                                       // the .command script path
+        assert!(cmd_file.ends_with(".command"));
+        let body = std::fs::read_to_string(cmd_file).unwrap();
+        assert!(body.contains("claude --resume deadbeef"));               // script runs the resume
     }
 }
