@@ -24,7 +24,7 @@ enum Cmd {
     Cancel { prefix: Option<String> },
     Arm { prefix: String },
     Fire { session: String },
-    Url,
+    Dashboard,
     Token { #[arg(long)] rotate: bool },
 }
 
@@ -82,7 +82,7 @@ pub fn run(args: Vec<String>) -> i32 {
             let s = resume::fire(&pending_dir(), &id, &c, Utc::now().timestamp(), &RealRunner, &crate::scheduler::which_path, "claude");
             println!("{s}"); 0
         }
-        Cmd::Url => { let c = ensure_cfg(); println!("http://{}:{}/?token={}", lan_ip(), c.port, c.token); 0 }
+        Cmd::Dashboard => { let c = ensure_cfg(); println!("http://{}:{}/?token={}", lan_ip(), c.port, c.token); 0 }
         Cmd::Token { rotate } => {
             let mut c = Config::load(&config_path());
             if rotate { c.token = String::new(); }

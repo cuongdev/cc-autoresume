@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LABEL="com.cuong.cc-autoresume"
+LABEL="local.cuong.cc-autoresume"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 BIN="$HOME/.local/bin/cc-autoresume"
 LOG="$HOME/.claude/auto-resume/watch.log"
 
 # 1. Supersede any running daemon (Python or old Rust)
 launchctl unload "$PLIST" 2>/dev/null || true
+launchctl unload "$HOME/Library/LaunchAgents/com.cuong.cc-autoresume.plist" 2>/dev/null || true   # legacy label
 
 # 2. Build release binary
 cd "$ROOT" && cargo build --release
