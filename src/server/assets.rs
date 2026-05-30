@@ -19,7 +19,7 @@ mod tests {
     async fn index_served_without_token() {
         let base = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
-        let mut cfg = Config::default(); cfg.token = "tk".into();
+        let cfg = Config { token: "tk".into(), ..Config::default() };
         cfg.save(&base.path().join("config.json")).unwrap();
         let app = build_router(test_state(base.path().into(), home.path().into()));
         let res = app.oneshot(Request::builder().uri("/").body(Body::empty()).unwrap()).await.unwrap();

@@ -90,7 +90,7 @@ mod tests {
     async fn session_stream_requires_token() {
         let base = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
-        let mut cfg = Config::default(); cfg.token = "tk".into();
+        let cfg = Config { token: "tk".into(), ..Config::default() };
         cfg.save(&base.path().join("config.json")).unwrap();
         let app = build_router(test_state(base.path().into(), home.path().into()));
         let res = app.oneshot(Request::builder().uri("/api/session/x/stream").body(Body::empty()).unwrap()).await.unwrap();
@@ -101,7 +101,7 @@ mod tests {
     async fn session_stream_opens_event_stream() {
         let base = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
-        let mut cfg = Config::default(); cfg.token = "tk".into();
+        let cfg = Config { token: "tk".into(), ..Config::default() };
         cfg.save(&base.path().join("config.json")).unwrap();
         let app = build_router(test_state(base.path().into(), home.path().into()));
         let res = app.oneshot(Request::builder().uri("/api/session/x/stream?token=tk").body(Body::empty()).unwrap()).await.unwrap();
