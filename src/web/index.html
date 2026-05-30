@@ -212,6 +212,7 @@
   <div class="dfoot">
     <button class="btn" onclick="copyCmd()" data-tip="copyCmd">Copy <code>claude --resume</code></button>
     <button class="btn" data-tip="openTerminal" onclick="api('/api/session/'+current.id+'/open',{method:'POST'}).then(()=>toast(t('toastTerm')))" data-i18n="openTerm"></button>
+      <button class="btn" onclick="testResume()" data-i18n="testResume"></button>
     <span class="spacer"></span>
     <button class="btn go" id="resumeNow" data-tip="resumeNow" onclick="api('/api/pending/'+current.id+'/fire',{method:'POST'}).then(()=>{toast(t('toastResume'));loadState();})" data-i18n="resumeNow"></button>
   </div>
@@ -236,6 +237,10 @@
     <div class="set-grid">
       <div><div class="set-lbl" data-i18n="portLbl"></div><div class="set-val">7317 <span class="set-sub" data-i18n="portNote"></span></div></div>
       <div><div class="set-lbl" data-i18n="configAt"></div><div class="set-val mono">~/.claude/auto-resume/config.json</div></div>
+    </div>
+    <div>
+      <div class="set-lbl"><span data-i18n="debug"></span><span class="help" data-tip="selftest">?</span></div>
+      <div class="set-row"><button class="btn" onclick="runSelftest()" data-i18n="selftest"></button><span id="selftest-result" class="set-sub" style="align-self:center"></span></div>
     </div>
   </div>
 </div></div>
@@ -293,7 +298,8 @@ const I18N={
     tip_settings:"Dashboard access — URL, QR for your phone, and the access token.",
     tip_regen:"Generate a new token. Old links and open tabs stop working until reopened with the new URL.",
     activeSessions:"Active sessions",live:"live",lastActive:"active",sessionMode:"Mode for this session",modeDefault:"(default)",presetSaved:"Preset saved",
-    tip_activeSessions:"Claude Code sessions active in the last 24h — set their resume message/mode before they hit a limit."},
+    tip_activeSessions:"Claude Code sessions active in the last 24h — set their resume message/mode before they hit a limit.",
+    debug:"Debug",selftest:"Self-test claude",testResume:"Test resume",testResuming:"Testing resume…",tip_selftest:"Runs 'claude --version' the way the daemon would — verifies the daemon can find & run claude (no resume, no quota)."},
   vi:{sub:"tự tiếp tục Claude Code khi quota reset",watcher:"Watcher",watching_on:"Đang theo dõi",lastscan:"quét lần cuối",
     next_reset:"Reset kế tiếp",hits7d:"Dính limit · 7 ngày",hits_last:"gần nhất: hôm nay 1:24pm",resumes:"Số lần tự resume",alltime:"từ trước tới nay",
     sess7d:"Phiên · 7 ngày",from_stats:"từ Claude stats",mode:"Chế độ",auto:"Tự động",ask:"Hỏi",off:"Tắt",
@@ -329,7 +335,8 @@ const I18N={
     tip_settings:"Truy cập dashboard — URL, QR cho điện thoại, và token truy cập.",
     tip_regen:"Tạo token mới. Link cũ và tab đang mở sẽ ngừng hoạt động cho tới khi mở lại bằng URL mới.",
     activeSessions:"Session đang hoạt động",live:"đang mở",lastActive:"hoạt động",sessionMode:"Chế độ cho session này",modeDefault:"(mặc định)",presetSaved:"Đã lưu cấu hình",
-    tip_activeSessions:"Các session Claude Code hoạt động trong 24h qua — đặt trước message/mode để khi dính limit nó tự dùng."}
+    tip_activeSessions:"Các session Claude Code hoạt động trong 24h qua — đặt trước message/mode để khi dính limit nó tự dùng.",
+    debug:"Debug",selftest:"Tự kiểm tra claude",testResume:"Test resume",testResuming:"Đang test resume…",tip_selftest:"Chạy 'claude --version' đúng cách daemon gọi — kiểm tra daemon có tìm & chạy được claude (không resume, không tốn quota)."}
 };
 let lang=localStorage.getItem('cc-lang')||'vi';
 function t(k){return (I18N[lang][k]!==undefined?I18N[lang][k]:(I18N.en[k]!==undefined?I18N.en[k]:k));}
@@ -483,6 +490,21 @@ function closeConvo(){
 function copyCmd(){const cmd=`cd ${current.cwd} && claude --resume ${current.id}`;navigator.clipboard&&navigator.clipboard.writeText(cmd);toast(t('toastCopied')+': '+cmd);}
 function saveSessionMsg(){
   savePreset();
+}
+function runSelftest(){
+  const el = document.getElementById('selftest-result');
+  el.textContent = '…'; el.style.color = 'var(--muted)';
+  api('/api/selftest').then(r=>r.json()).then(d=>{
+    el.textContent = (d.ok ? '✓ ' : '✗ ') + (d.version || ('exit ' + d.code)) + '  @ ' + d.claudeBin;
+    el.style.color = d.ok ? 'var(--green)' : 'var(--red)';
+  }).catch(()=>{ el.textContent = 'error'; el.style.color = 'var(--red)'; });
+}
+function testResume(){
+  if (!current) return;
+  toast(t('testResuming'));
+  api('/api/session/'+current.id+'/test-resume',{method:'POST',body:JSON.stringify({message: document.getElementById('d-msg').value})})
+    .then(r=>r.json()).then(d=>{ toast('Test resume → ' + d.outcome); loadSessions(); loadState(); })
+    .catch(()=>toast('test-resume error'));
 }
 let tt;function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('show'),2400);}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeConvo();closeSettings();}});
