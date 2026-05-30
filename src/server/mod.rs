@@ -44,6 +44,7 @@ pub fn build_router(state: AppState) -> axum::Router {
         .route("/api/pending/:id/fire", post(api::fire_pending))
         .route("/api/session/:id/open", post(api::open_terminal))
         .route("/api/session/:id/messages", get(api::session_messages))
+        .route("/api/session/:id/stream", get(sse::session_stream))
         .route("/api/token/rotate", post(api::rotate_token))
         .route("/events", get(sse::events))
         .layer(middleware::from_fn_with_state(state.clone(), auth::require_token));
