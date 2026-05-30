@@ -1,3 +1,4 @@
+pub mod transcript;
 pub mod account;
 pub mod stats;
 pub mod parse_reset;
