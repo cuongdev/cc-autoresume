@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="cc-autoresume logo">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2230"/><stop offset="1" stop-color="#0a0c11"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d6ff5c"/><stop offset="1" stop-color="#b8f23a"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#tile)" stroke="#2c3647" stroke-width="2"/>
+  <path d="M70 24 L40 70 H58 L54 104 L88 56 H68 L74 24 Z" fill="url(#bolt)" stroke="#b8f23a" stroke-width="2" stroke-linejoin="round"/>
+</svg>
