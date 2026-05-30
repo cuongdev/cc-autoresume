@@ -1,3 +1,4 @@
+pub mod assets;
 pub mod auth;
 pub mod api;
 pub mod sse;
@@ -50,6 +51,7 @@ pub fn build_router(state: AppState) -> axum::Router {
         .layer(middleware::from_fn_with_state(state.clone(), auth::require_token));
     axum::Router::new()
         .route("/healthz", get(|| async { "ok" }))
+        .route("/", get(assets::serve_index))
         .merge(protected)
         .with_state(state)
 }
