@@ -10,8 +10,22 @@ pub fn is_session_live(transcript_path: &str, runner: &dyn Runner,
     !out.stdout.trim().is_empty()
 }
 
+/// Shell-single-quote a string for safe interpolation into a `zsh -lc` command.
+fn shquote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
 pub fn build_cmd(message: &str, session_id: &str, claude_bin: &str) -> Vec<String> {
-    vec![claude_bin.into(), "-p".into(), message.into(), "--resume".into(), session_id.into()]
+    // Spawn via a LOGIN shell so the resumed session — and the hooks it runs
+    // (e.g. node-based PostToolUse hooks) — inherit the user's real PATH. The
+    // LaunchAgent's own PATH is minimal (/usr/bin:/bin:…) and lacks node, which
+    // makes every hook fail with "node: command not found". `claude_bin` is an
+    // absolute path, so the shell is only here to fix PATH for child processes.
+    let inner = format!(
+        "exec {} -p {} --resume {}",
+        shquote(claude_bin), shquote(message), shquote(session_id)
+    );
+    vec!["/bin/zsh".into(), "-lc".into(), inner]
 }
 
 static LIMITED_RE: LazyLock<Regex> =
@@ -130,7 +144,8 @@ mod tests {
     }
     #[test]
     fn build_cmd_shape() {
-        assert_eq!(build_cmd("go", "s1", "claude"), vec!["claude","-p","go","--resume","s1"]);
+        assert_eq!(build_cmd("go", "s1", "claude"),
+            vec!["/bin/zsh", "-lc", "exec 'claude' -p 'go' --resume 's1'"]);
     }
     #[test]
     fn live_skips_headless() {
@@ -147,7 +162,7 @@ mod tests {
     fn dead_runs_headless() {
         let f = Fake::new("", "done", 0);
         assert_eq!(run_resume(&rec(), &cfg(false, 3), &f, &lsof_yes, "claude"), "ok");
-        assert!(f.calls.borrow().iter().any(|c| c.contains(&"--resume".to_string())));
+        assert!(f.calls.borrow().iter().any(|c| c.iter().any(|s| s.contains("--resume"))));
     }
     #[test]
     fn still_limited_from_output() {

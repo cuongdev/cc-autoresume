@@ -487,7 +487,7 @@ mod tests {
         assert_eq!(res.status(), StatusCode::OK);
         let v: serde_json::Value = serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
         assert_eq!(v["outcome"], "ok");
-        assert!(rec.0.lock().unwrap().iter().any(|c| c.contains(&"--resume".to_string())));
+        assert!(rec.0.lock().unwrap().iter().any(|c| c.iter().any(|s| s.contains("--resume"))));
         // unknown -> 404
         let res = app.oneshot(Request::builder().method("POST").uri("/api/session/nope/test-resume")
             .header("authorization","Bearer tk").header("content-type","application/json").body(Body::from("{}")).unwrap()).await.unwrap();
