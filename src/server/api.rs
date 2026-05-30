@@ -105,6 +105,21 @@ pub async fn open_terminal(State(s): State<AppState>, axum::extract::Path(id): a
 
 fn shell_quote(s: &str) -> String { s.replace('\\', "\\\\").replace('"', "\\\"") }
 
+#[derive(serde::Deserialize)]
+pub struct QrQ { pub data: String }
+
+pub async fn qr_svg(State(_s): State<AppState>, axum::extract::Query(q): axum::extract::Query<QrQ>) -> impl IntoResponse {
+    use qrcode::QrCode;
+    use qrcode::render::svg;
+    match QrCode::new(q.data.as_bytes()) {
+        Ok(code) => {
+            let s = code.render::<svg::Color>().min_dimensions(180, 180).quiet_zone(true).build();
+            ([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], s).into_response()
+        }
+        Err(_) => StatusCode::BAD_REQUEST.into_response(),
+    }
+}
+
 /// Resolve a session id to its transcript path: pending record → recent → search projects dir.
 pub fn find_transcript(s: &AppState, id: &str) -> Option<std::path::PathBuf> {
     if let Some(r) = pending::read(&s.pending_dir(), id) {
@@ -292,6 +307,18 @@ mod tests {
         let res = app.oneshot(Request::builder().uri("/api/session/nope/messages")
             .header("authorization", format!("Bearer {t}")).body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn qr_returns_svg() {
+        let (base, home, t) = setup();
+        let app = build_router(test_state(base.path().into(), home.path().into()));
+        let res = app.oneshot(Request::builder().uri("/api/qr?data=http://x/?token=abc")
+            .header("authorization", format!("Bearer {t}")).body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert!(res.headers().get("content-type").unwrap().to_str().unwrap().contains("image/svg+xml"));
+        let body = res.into_body().collect().await.unwrap().to_bytes();
+        assert!(String::from_utf8_lossy(&body).contains("<svg"));
     }
 
     #[tokio::test]
