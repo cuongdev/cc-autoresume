@@ -394,7 +394,7 @@ function applyState(s){
   document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on', b.dataset.m===s.mode));
   const fh = document.getElementById('fh'); fh.classList.toggle('on', !!s.forceHeadless);
   fh.querySelector('span:last-child').textContent = s.forceHeadless ? t('on_l') : t('off_l');
-  document.querySelector('.msgbox input').value = s.defaultMessage || '';
+  const mb = document.querySelector('.msgbox input'); if (mb !== document.activeElement) mb.value = s.defaultMessage || '';
   render(); updNext(); renderRecent();
 }
 function renderRecent(){
@@ -463,12 +463,12 @@ function msgBubble(m){
 async function openConvo(id, cwd, state){
   current = { id, cwd, ref: STATE.pending.find(p=>p.sessionId===id) || null };
   const sinfo = SESSIONS.find(x=>x.sessionId===id);
-  if (sinfo && sinfo.presetMessage && !(current.ref && current.ref.message)) document.getElementById('d-msg').value = sinfo.presetMessage;
   setModeSeg(sinfo ? (sinfo.presetMode||'') : '');
   document.getElementById('d-sid').textContent = id.slice(0,8);
   document.getElementById('d-cwd').textContent = cwd;
-  const mi = document.getElementById('d-msg'); mi.value = (current.ref && current.ref.message) || ''; mi.placeholder = t('usingGlobal');
-  document.getElementById('dmsg').classList.toggle('overridden', !!(current.ref && current.ref.message));
+  const sessionMsg = (current.ref && current.ref.message) || (sinfo && sinfo.presetMessage) || '';
+  const mi = document.getElementById('d-msg'); mi.value = sessionMsg; mi.placeholder = t('usingGlobal');
+  document.getElementById('dmsg').classList.toggle('overridden', !!sessionMsg);
   document.getElementById('resumeNow').style.display = (state==='armed'||state==='ask') ? 'inline-flex' : 'none';
   const c = document.getElementById('convo'); c.innerHTML='';
   document.getElementById('scrim').classList.add('open'); document.getElementById('modal').classList.add('open');
