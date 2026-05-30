@@ -175,7 +175,7 @@
     <div class="ctl"><span class="lbl"><span data-i18n="mode"></span><span class="help" data-tip="mode">?</span></span>
       <div class="seg" id="seg"><button class="on" data-m="auto" data-tip="modeAuto" data-i18n="auto"></button><button data-m="ask" data-tip="modeAsk" data-i18n="ask"></button><button data-m="off" data-tip="modeOff" data-i18n="off"></button></div></div>
     <div class="ctl"><span class="lbl"><span data-i18n="forceHeadless"></span><span class="help" data-tip="forceHeadless">?</span></span>
-      <label class="switch" id="fh"><span class="track"><i></i></span><span data-i18n="off_l"></span></label></div>
+      <label class="switch" id="fh" data-tip="forceHeadless"><span class="track"><i></i></span><span data-i18n="off_l"></span></label></div>
     <div class="ctl msgrow"><span class="lbl"><span data-i18n="resumeMsg"></span><span class="help" data-tip="resumeMessage">?</span></span>
       <div class="msgbox"><input value="Quota đã reset. Đọc lại việc đang dở và tiếp tục từ chỗ dừng, không hỏi lại."><button class="btn" data-i18n="save"></button></div></div>
   </div>
@@ -283,7 +283,7 @@ const I18N={
     tip_modeAuto:"Auto — automatically resume the session when quota resets. Set it once and walk away.",
     tip_modeAsk:"Ask — when a limit is hit, wait for you to confirm (Arm) before scheduling a resume.",
     tip_modeOff:"Off — never auto-resume; just send a notification.",
-    tip_forceHeadless:"Resume in the background even if the old terminal window is still open. Off = if a live window exists, just nudge you (avoids two writers on one session).",
+    tip_forceHeadless:"Matters only when quota returns AND the old Claude Code window is still open. ON = auto-continue it silently in the background, hands-off. OFF = just notify you so you press Continue yourself (safer — avoids two processes writing the same session). If the window is already closed, it always resumes in the background either way.",
     tip_resumeMessage:"The message sent to Claude when a session resumes. Global default for every session.",
     tip_resumeMessageSession:"Override the resume message for just this session — useful because each session does a different task. Empty = use the global default.",
     tip_pending:"Sessions that hit their limit and are scheduled to auto-resume when quota resets.",
@@ -320,7 +320,7 @@ const I18N={
     tip_modeAuto:"Tự động — tự resume khi quota reset. Set một lần rồi đi làm việc khác.",
     tip_modeAsk:"Hỏi — khi dính limit, chờ bạn bấm xác nhận (Arm) thì mới lên lịch resume.",
     tip_modeOff:"Tắt — không bao giờ tự resume; chỉ gửi thông báo.",
-    tip_forceHeadless:"Resume chạy nền kể cả khi cửa sổ terminal cũ vẫn mở. Tắt = nếu còn cửa sổ sống thì chỉ nhắc bạn (tránh 2 tiến trình ghi cùng 1 session).",
+    tip_forceHeadless:"Chỉ có tác dụng khi quota về MÀ cửa sổ Claude Code cũ vẫn đang mở. BẬT = tự chạy tiếp ngầm dưới nền, không cần bạn đụng tay. TẮT = chỉ báo cho bạn để tự bấm Continue (an toàn hơn — tránh 2 tiến trình cùng ghi vào 1 session). Nếu cửa sổ đã đóng thì cả hai trường hợp đều luôn tự resume ngầm.",
     tip_resumeMessage:"Câu gửi cho Claude khi resume. Mặc định global cho mọi session.",
     tip_resumeMessageSession:"Ghi đè câu resume riêng cho session này — hữu ích vì mỗi session làm task khác nhau. Để trống = dùng mặc định global.",
     tip_pending:"Các session đã dính limit và được lên lịch tự resume khi quota reset.",
@@ -558,9 +558,15 @@ document.getElementById('setbtn').onclick=openSettings;
 // tooltips
 const tip=document.getElementById('tip');
 function moveTip(e){const x=Math.min(e.clientX,window.innerWidth-320);tip.style.left=x+'px';tip.style.top=(e.clientY+18)+'px';}
-function bindTips(){document.querySelectorAll('[data-tip]').forEach(el=>{
-  el.onmouseenter=e=>{tip.textContent=t('tip_'+el.dataset.tip);tip.classList.add('show');moveTip(e);};
-  el.onmousemove=moveTip;el.onmouseleave=()=>tip.classList.remove('show');});}
+// Delegated tooltips: one listener on document so it works for every [data-tip]
+// element — static or dynamically rendered — and never depends on render() order.
+document.addEventListener('mouseover',e=>{
+  const el=e.target.closest('[data-tip]');
+  if(el){const txt=t('tip_'+el.dataset.tip);if(txt){tip.textContent=txt;tip.classList.add('show');moveTip(e);return;}}
+  tip.classList.remove('show');
+});
+document.addEventListener('mousemove',e=>{if(tip.classList.contains('show'))moveTip(e);});
+function bindTips(){}  // tooltips are delegated now; kept as a no-op for existing call sites
 
 // i18n apply
 function applyLang(){
