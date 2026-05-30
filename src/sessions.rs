@@ -108,23 +108,47 @@ fn cwd_fast(path: &Path) -> Option<String> {
     None
 }
 
-/// First user-prompt snippet (≤60 chars, whitespace-collapsed) for a friendly label.
+/// True if `text` is a synthetic / system / tooling line rather than something
+/// the human actually typed (caveats, slash-command wrappers, limit notices…).
+fn is_noise_title(text: &str) -> bool {
+    let t = text.trim_start_matches(['⎿', '└', ' ', '\u{00b7}']).trim_start();
+    let lower = t.to_lowercase();
+    lower.contains("hit your limit")
+        || lower.contains("hit your session limit")
+        || t.starts_with("<local-command-caveat")
+        || t.starts_with("<command-name")
+        || t.starts_with("<command-message")
+        || t.starts_with("<command-args")
+        || t.starts_with("<bash-")
+        || t.starts_with("<system-reminder")
+        || t.starts_with("Caveat:")
+        || t.starts_with("[Request interrupted")
+}
+
+/// First genuine user-prompt snippet (≤60 chars, whitespace-collapsed) for a friendly label.
 fn title_fast(path: &Path) -> Option<String> {
     use std::io::{BufRead, BufReader};
     let f = std::fs::File::open(path).ok()?;
-    for line in BufReader::new(f).lines().take(20).map_while(Result::ok) {
+    for line in BufReader::new(f).lines().take(40).map_while(Result::ok) {
         let Ok(o) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
         if o.get("type").and_then(|t| t.as_str()) != Some("user") { continue; }
+        // skip meta/system-injected turns (caveats, command output, etc.)
+        if o.get("isMeta").and_then(|m| m.as_bool()) == Some(true) { continue; }
         let content = o.get("message").and_then(|m| m.get("content"));
         let text = match content {
             Some(serde_json::Value::String(s)) => s.clone(),
-            Some(serde_json::Value::Array(a)) =>
-                a.iter().find_map(|b| b.get("text").and_then(|t| t.as_str())).unwrap_or("").to_string(),
+            // only real text blocks — ignore tool_result / image blocks
+            Some(serde_json::Value::Array(a)) => a
+                .iter()
+                .filter(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
+                .find_map(|b| b.get("text").and_then(|t| t.as_str()))
+                .unwrap_or("")
+                .to_string(),
             _ => continue,
         };
         let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
         let collapsed = collapsed.trim();
-        if collapsed.is_empty() { continue; }
+        if collapsed.is_empty() || is_noise_title(collapsed) { continue; }
         let snippet: String = collapsed.chars().take(60).collect();
         return Some(if collapsed.chars().count() > 60 { format!("{snippet}…") } else { snippet });
     }
@@ -176,6 +200,29 @@ mod tests {
         let got2 = discover(proj.path(), &pres, pend.path(), m + 300, i64::MAX, 60, 120);
         assert!(!got2[0].live);                        // age 300s > 120
     }
+    #[test]
+    fn title_skips_synthetic_caveat_and_tool_results() {
+        let d = tempfile::tempdir().unwrap();
+        let fp = d.path().join("s.jsonl");
+        let lines = [
+            r#"{"type":"user","isMeta":true,"message":{"content":"<local-command-caveat>Caveat: The messages below were generated…</local-command-caveat>"}}"#,
+            r#"{"type":"user","message":{"content":"⎿ You've hit your session limit · resets 2:30am (Asia/Saigon)"}}"#,
+            r#"{"type":"user","message":{"content":[{"type":"tool_result","text":"some tool output"}]}}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hello"}]}}"#,
+            r#"{"type":"user","message":{"content":"Refactor the auth module please"}}"#,
+        ];
+        std::fs::write(&fp, lines.join("\n") + "\n").unwrap();
+        assert_eq!(title_fast(&fp).as_deref(), Some("Refactor the auth module please"));
+    }
+
+    #[test]
+    fn is_noise_title_matches_synthetic_lines() {
+        assert!(is_noise_title("⎿ You've hit your session limit · resets 2:30am"));
+        assert!(is_noise_title("<local-command-caveat>x"));
+        assert!(is_noise_title("Caveat: blah"));
+        assert!(!is_noise_title("Build the billing API"));
+    }
+
     #[test]
     fn discover_excludes_outside_window() {
         let proj = tempfile::tempdir().unwrap();
