@@ -180,6 +180,9 @@
       <div class="msgbox"><input value="Quota đã reset. Đọc lại việc đang dở và tiếp tục từ chỗ dừng, không hỏi lại."><button class="btn" data-i18n="save"></button></div></div>
   </div>
 
+  <div class="sec-h"><h2 data-i18n="activeSessions"></h2><span class="count" id="activeCount">0</span><span class="help" data-tip="activeSessions">?</span></div>
+  <div class="grid" id="activeGrid"></div>
+
   <div class="sec-h"><h2 data-i18n="pending"></h2><span class="count" id="pcount">3</span><span class="help" data-tip="pending">?</span></div>
   <div class="grid" id="grid"></div>
 
@@ -196,7 +199,16 @@
     <div class="live" id="d-live"><span class="dot"></span> Live</div><button class="close" onclick="closeConvo()">✕</button></div>
   <div class="convo" id="convo"></div>
   <div class="dmsg" id="dmsg"><span class="lbl"><span data-i18n="msgThis"></span><span class="ov" data-i18n="overrides"></span><span class="help" data-tip="resumeMessageSession">?</span></span>
-    <div class="row"><input id="d-msg"><button class="btn" onclick="saveSessionMsg()" data-i18n="save"></button></div></div>
+    <div class="row"><input id="d-msg"><button class="btn" onclick="saveSessionMsg()" data-i18n="save"></button></div>
+      <div class="row" style="margin-top:8px;align-items:center;gap:10px">
+        <span class="lbl" style="margin:0" data-i18n="sessionMode"></span>
+        <div class="seg" id="d-mode">
+          <button data-pm="" data-i18n="modeDefault"></button>
+          <button data-pm="auto" data-i18n="auto"></button>
+          <button data-pm="ask" data-i18n="ask"></button>
+          <button data-pm="off" data-i18n="off"></button>
+        </div>
+      </div></div>
   <div class="dfoot">
     <button class="btn" onclick="copyCmd()" data-tip="copyCmd">Copy <code>claude --resume</code></button>
     <button class="btn" data-tip="openTerminal" onclick="api('/api/session/'+current.id+'/open',{method:'POST'}).then(()=>toast(t('toastTerm')))" data-i18n="openTerm"></button>
@@ -279,7 +291,9 @@ const I18N={
     portLbl:"Port",portNote:"change in config.json, then restart the daemon",
     configAt:"Config file",reveal:"Reveal",hide:"Hide",scanPhone:"Scan to open on your phone",copy:"Copy",rotated:"New token generated",
     tip_settings:"Dashboard access — URL, QR for your phone, and the access token.",
-    tip_regen:"Generate a new token. Old links and open tabs stop working until reopened with the new URL."},
+    tip_regen:"Generate a new token. Old links and open tabs stop working until reopened with the new URL.",
+    activeSessions:"Active sessions",live:"live",lastActive:"active",sessionMode:"Mode for this session",modeDefault:"(default)",presetSaved:"Preset saved",
+    tip_activeSessions:"Claude Code sessions active in the last 24h — set their resume message/mode before they hit a limit."},
   vi:{sub:"tự tiếp tục Claude Code khi quota reset",watcher:"Watcher",watching_on:"Đang theo dõi",lastscan:"quét lần cuối",
     next_reset:"Reset kế tiếp",hits7d:"Dính limit · 7 ngày",hits_last:"gần nhất: hôm nay 1:24pm",resumes:"Số lần tự resume",alltime:"từ trước tới nay",
     sess7d:"Phiên · 7 ngày",from_stats:"từ Claude stats",mode:"Chế độ",auto:"Tự động",ask:"Hỏi",off:"Tắt",
@@ -313,7 +327,9 @@ const I18N={
     portLbl:"Port",portNote:"đổi trong config.json rồi khởi động lại daemon",
     configAt:"File cấu hình",reveal:"Hiện",hide:"Ẩn",scanPhone:"Quét để mở trên điện thoại",copy:"Copy",rotated:"Đã tạo token mới",
     tip_settings:"Truy cập dashboard — URL, QR cho điện thoại, và token truy cập.",
-    tip_regen:"Tạo token mới. Link cũ và tab đang mở sẽ ngừng hoạt động cho tới khi mở lại bằng URL mới."}
+    tip_regen:"Tạo token mới. Link cũ và tab đang mở sẽ ngừng hoạt động cho tới khi mở lại bằng URL mới.",
+    activeSessions:"Session đang hoạt động",live:"đang mở",lastActive:"hoạt động",sessionMode:"Chế độ cho session này",modeDefault:"(mặc định)",presetSaved:"Đã lưu cấu hình",
+    tip_activeSessions:"Các session Claude Code hoạt động trong 24h qua — đặt trước message/mode để khi dính limit nó tự dùng."}
 };
 let lang=localStorage.getItem('cc-lang')||'vi';
 function t(k){return (I18N[lang][k]!==undefined?I18N[lang][k]:(I18N.en[k]!==undefined?I18N.en[k]:k));}
@@ -390,6 +406,41 @@ function renderRecent(){
 }
 async function loadState(){ try { const r = await api('/api/state'); if (r.ok) applyState(await r.json()); } catch(e){} }
 
+function relTime(epoch){
+  const s = Math.max(0, Math.floor(Date.now()/1000) - epoch);
+  if (s < 60) return s+'s'; if (s < 3600) return Math.floor(s/60)+'m';
+  if (s < 86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d';
+}
+let SESSIONS = [];
+async function loadSessions(){
+  try { const r = await api('/api/sessions'); if(!r.ok) return; const d = await r.json();
+    SESSIONS = d.sessions || []; renderActive(); } catch(e){}
+}
+function renderActive(){
+  const g = document.getElementById('activeGrid'); if(!g) return;
+  document.getElementById('activeCount').textContent = SESSIONS.length;
+  g.innerHTML = SESSIONS.map(s=>{
+    const short = s.sessionId.slice(0,8);
+    const dot = s.live ? '<span class="dot" style="width:8px;height:8px"></span>' : '';
+    const badges = (s.hasPreset ? `<span class="pill armed">preset</span>` : '') + (s.pending ? `<span class="pill ask">pending</span>` : '');
+    return `<div class="card recent-row" onclick="openConvo('${s.sessionId}','${(s.cwd||'').replace(/'/g,"\\'")}','active')">
+      ${dot}<span class="sid">${short}</span><span class="cwd">${s.cwd||''}</span>
+      ${badges}<span class="meta">${t('lastActive')} ${relTime(s.lastActivityEpoch)}</span>
+      <span class="view-hint" style="opacity:.6">→</span></div>`;
+  }).join('');
+  bindTips();
+}
+function setModeSeg(mode){
+  document.querySelectorAll('#d-mode button').forEach(b=>b.classList.toggle('on', (b.dataset.pm||'')===(mode||'')));
+}
+function savePreset(){
+  const message = document.getElementById('d-msg').value;
+  const mode = document.querySelector('#d-mode button.on')?.dataset.pm ?? '';
+  api('/api/session/'+current.id+'/preset',{method:'POST',body:JSON.stringify({message, mode})})
+    .then(()=>{ toast(t('presetSaved')); loadSessions(); loadState(); });
+}
+document.getElementById('d-mode').addEventListener('click', e=>{ if(e.target.dataset.pm!==undefined) setModeSeg(e.target.dataset.pm); });
+
 function cancelOne(id){ api('/api/pending/'+id+'/cancel',{method:'POST'}).then(loadState); }
 function armNow(id){ api('/api/pending/'+id+'/arm',{method:'POST'}).then(loadState); }
 
@@ -404,6 +455,9 @@ function msgBubble(m){
 }
 async function openConvo(id, cwd, state){
   current = { id, cwd, ref: STATE.pending.find(p=>p.sessionId===id) || null };
+  const sinfo = SESSIONS.find(x=>x.sessionId===id);
+  if (sinfo && sinfo.presetMessage && !(current.ref && current.ref.message)) document.getElementById('d-msg').value = sinfo.presetMessage;
+  setModeSeg(sinfo ? (sinfo.presetMode||'') : '');
   document.getElementById('d-sid').textContent = id.slice(0,8);
   document.getElementById('d-cwd').textContent = cwd;
   const mi = document.getElementById('d-msg'); mi.value = (current.ref && current.ref.message) || ''; mi.placeholder = t('usingGlobal');
@@ -428,11 +482,7 @@ function closeConvo(){
 }
 function copyCmd(){const cmd=`cd ${current.cwd} && claude --resume ${current.id}`;navigator.clipboard&&navigator.clipboard.writeText(cmd);toast(t('toastCopied')+': '+cmd);}
 function saveSessionMsg(){
-  const v = document.getElementById('d-msg').value.trim();
-  api('/api/pending/'+current.id+'/message',{method:'POST',body:JSON.stringify({text:v})}).then(()=>{
-    document.getElementById('dmsg').classList.toggle('overridden', !!v);
-    toast(v ? t('toastSaved')+' '+current.id.slice(0,8) : t('toastCleared'));
-  });
+  savePreset();
 }
 let tt;function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('show'),2400);}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeConvo();closeSettings();}});
@@ -470,7 +520,7 @@ function applyLang(){
   document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));
   document.getElementById('langlabel').textContent=lang==='vi'?'VI':'EN';
   document.documentElement.lang=lang;
-  render();updNext();renderRecent();bindTips();
+  render();updNext();renderRecent();bindTips();renderActive();
 }
 document.getElementById('langbtn').onclick=()=>{lang=lang==='vi'?'en':'vi';localStorage.setItem('cc-lang',lang);applyLang();};
 
@@ -498,6 +548,8 @@ loadState();
 const es = new EventSource(sseUrl('/events'));
 es.onmessage = ev => { try { applyState(JSON.parse(ev.data)); } catch(e){} };
 setInterval(()=>{ render(); updNext(); }, 1000);
+loadSessions();
+setInterval(loadSessions, 15000);
 </script>
 </body>
 </html>
