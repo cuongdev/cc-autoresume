@@ -1,9 +1,15 @@
-use axum::response::Html;
+use axum::http::header;
+use axum::response::{Html, IntoResponse};
 
 const INDEX_HTML: &str = include_str!("../web/index.html");
 
-pub async fn serve_index() -> Html<&'static str> {
-    Html(INDEX_HTML)
+pub async fn serve_index() -> impl IntoResponse {
+    // The dashboard HTML embeds its own JS/CSS, so it must never be cached —
+    // otherwise a browser keeps serving a stale UI after the binary is updated.
+    (
+        [(header::CACHE_CONTROL, "no-store, must-revalidate")],
+        Html(INDEX_HTML),
+    )
 }
 
 #[cfg(test)]
@@ -26,6 +32,8 @@ mod tests {
         assert_eq!(res.status(), StatusCode::OK);
         let ct = res.headers().get("content-type").unwrap().to_str().unwrap();
         assert!(ct.contains("text/html"));
+        let cc = res.headers().get("cache-control").unwrap().to_str().unwrap();
+        assert!(cc.contains("no-store"));
         let body = res.into_body().collect().await.unwrap().to_bytes();
         assert!(String::from_utf8_lossy(&body).contains("cc-autoresume"));
     }
