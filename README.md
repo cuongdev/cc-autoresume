@@ -19,10 +19,6 @@ When a Claude Code session hits its usage limit ("You've hit your limit · reset
 - **Settings** — copyable URL, scannable **QR** to open on your phone, token rotation.
 - **Polish** — light/dark theme, English/Vietnamese, inline help tooltips.
 
-## Screenshot
-
-![cc-autoresume dashboard](docs/screenshot.png)
-
 ## Install (macOS)
 
 ```bash
