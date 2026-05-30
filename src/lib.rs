@@ -1,3 +1,4 @@
+pub mod sessions;
 pub mod transcript;
 pub mod account;
 pub mod stats;
