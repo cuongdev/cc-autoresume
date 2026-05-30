@@ -405,8 +405,8 @@ function renderRecent(){
     const short = (r.sessionId||'').slice(0,8);
     const outcome = r.outcome==='ok' ? t('st_done') : (r.outcome||'');
     return `<div class="card recent-row" onclick="openConvo('${r.sessionId}','${(r.cwd||'').replace(/'/g,"\\'")}','done')">
-      <span class="pill done">${t('st_done')}</span><span class="sid">${short}</span>
-      <span class="cwd">${r.cwd||''}</span><span class="meta">${outcome}</span>
+      <span class="pill done">${t('st_done')}</span><span class="sid">${proj(r.cwd)}</span>
+      <span class="cwd"><span style="opacity:.55">${short}</span> · ${r.cwd||''}</span><span class="meta">${outcome}</span>
       <span class="view-hint" style="opacity:.6">${t('viewConvo')}</span></div>`;
   }).join('');
   bindTips();
@@ -423,6 +423,7 @@ async function loadSessions(){
   try { const r = await api('/api/sessions'); if(!r.ok) return; const d = await r.json();
     SESSIONS = d.sessions || []; renderActive(); } catch(e){}
 }
+function proj(cwd){ const p=(cwd||'').replace(/\/+$/,'').split('/').pop(); return p||'—'; }
 function renderActive(){
   const g = document.getElementById('activeGrid'); if(!g) return;
   document.getElementById('activeCount').textContent = SESSIONS.length;
@@ -433,7 +434,7 @@ function renderActive(){
     const dot = s.live ? '<span class="dot" style="width:8px;height:8px"></span>' : '';
     const badges = (s.hasPreset ? `<span class="pill armed">preset</span>` : '') + (s.pending ? `<span class="pill ask">pending</span>` : '');
     return `<div class="card recent-row" onclick="openConvo('${s.sessionId}','${(s.cwd||'').replace(/'/g,"\\'")}','active')">
-      ${dot}<span class="sid">${short}</span><span class="cwd">${s.cwd||''}</span>
+      ${dot}<span class="sid">${proj(s.cwd)}</span><span class="cwd"><span style="opacity:.55">${short}</span> · ${s.cwd||''}</span>
       ${badges}<span class="meta">${t('lastActive')} ${relTime(s.lastActivityEpoch)}</span>
       <span class="view-hint" style="opacity:.6">→</span></div>`;
   }).join('');
@@ -474,7 +475,7 @@ async function openConvo(id, cwd, state){
   current = { id, cwd, ref: STATE.pending.find(p=>p.sessionId===id) || null };
   const sinfo = SESSIONS.find(x=>x.sessionId===id);
   setModeSeg(sinfo ? (sinfo.presetMode||'') : '');
-  document.getElementById('d-sid').textContent = id.slice(0,8);
+  document.getElementById('d-sid').textContent = proj(cwd) + ' · ' + id.slice(0,8);
   document.getElementById('d-cwd').textContent = cwd;
   const sessionMsg = (current.ref && current.ref.message) || (sinfo && sinfo.presetMessage) || '';
   const mi = document.getElementById('d-msg'); mi.value = sessionMsg; mi.placeholder = t('usingGlobal');
