@@ -45,7 +45,11 @@ pub fn fire(dir: &Path, id: &str, cfg: &Config, now: i64, runner: &dyn Runner,
     let status = run_resume(&rec, cfg, runner, which, claude_bin);
     match status {
         "still-limited" | "error" => {
-            let mut r = rec;
+            // a cancel may have landed during the (slow) resume run — re-read fresh state
+            let mut r = match pending::read(dir, id) {
+                Some(r) if !r.cancelled => r,
+                _ => return "cancelled",
+            };
             r.attempts += 1;
             if r.attempts >= cfg.backoff.max_attempts {
                 pending::remove(dir, id);
@@ -169,5 +173,27 @@ mod tests {
         let f = Fake::new("", "done", 0);
         assert_eq!(fire(d.path(), "s1abcdef", &cfg(false, 3), 0, &f, &lsof_yes, "claude"), "ok");
         assert!(pending::read(d.path(), "s1abcdef").is_none());
+    }
+
+    // A cancel that lands DURING the (slow) resume run must stick — fire must not
+    // reschedule it by writing back a stale record.
+    #[test]
+    fn fire_respects_cancel_during_run() {
+        let d = tempfile::tempdir().unwrap();
+        pending::write(d.path(), &rec()).unwrap();
+        struct Canceller { dir: std::path::PathBuf }
+        impl Runner for Canceller {
+            fn run(&self, a: &[String], _c: Option<&str>) -> CmdOut {
+                if a[0].ends_with("lsof") { return CmdOut::default(); }   // not live
+                pending::cancel(&self.dir, "s1abcdef");                    // user cancels mid-run
+                CmdOut { stdout: "boom".into(), code: 1, ..Default::default() }   // error
+            }
+        }
+        let c = cfg(false, 3);
+        let runner = Canceller { dir: d.path().to_path_buf() };
+        assert_eq!(fire(d.path(), "s1abcdef", &c, 1000, &runner, &lsof_yes, "claude"), "cancelled");
+        let r = pending::read(d.path(), "s1abcdef").unwrap();
+        assert!(r.cancelled);          // cancel preserved
+        assert_eq!(r.attempts, 0);     // NOT rescheduled
     }
 }
