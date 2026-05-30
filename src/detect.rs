@@ -1,5 +1,6 @@
 use regex::Regex;
 use serde_json::Value;
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LimitEvent {
@@ -10,10 +11,10 @@ pub struct LimitEvent {
     pub ts: String,
 }
 
-fn limit_re() -> Regex {
+static LIMIT_RE: LazyLock<Regex> = LazyLock::new(|| {
     // `·` is U+00B7
     Regex::new(r"hit your (?:session )?limit · resets (.+?)\s*$").unwrap()
-}
+});
 
 fn extract_text(content: &Value) -> String {
     match content {
@@ -32,7 +33,7 @@ pub fn detect_line(line: &str, session_id: &str, cwd: Option<&str>, transcript_p
         return None;
     }
     let text = extract_text(msg.get("content").unwrap_or(&Value::Null));
-    let caps = limit_re().captures(&text)?;
+    let caps = LIMIT_RE.captures(&text)?;
     Some(LimitEvent {
         session_id: session_id.to_string(),
         cwd: cwd.map(|c| c.to_string()),
