@@ -1,6 +1,5 @@
-use crate::{config::Config, pending, resume, watch::Watcher, RealRunner};
+use crate::{config::Config, pending, resume, RealRunner};
 use chrono::Utc;
-use chrono_tz::Tz;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -10,8 +9,6 @@ fn dirs_home() -> PathBuf {
 fn base_dir() -> PathBuf { dirs_home().join(".claude/auto-resume") }
 fn config_path() -> PathBuf { base_dir().join("config.json") }
 fn pending_dir() -> PathBuf { base_dir().join("pending") }
-fn projects_dir() -> PathBuf { dirs_home().join(".claude/projects") }
-fn local_tz() -> Tz { std::env::var("TZ").ok().and_then(|t| t.parse().ok()).unwrap_or(chrono_tz::UTC) }
 
 #[derive(Parser)]
 #[command(name = "cc-autoresume")]
@@ -40,7 +37,7 @@ pub fn run(args: Vec<String>) -> i32 {
         Err(e) => { let _ = e.print(); return 2; }
     };
     match cli.cmd {
-        Cmd::Watch => { run_forever(); 0 }
+        Cmd::Watch => { crate::server::serve(dirs_home()); 0 }
         Cmd::Mode { value } => {
             if !["auto","ask","off"].contains(&value.as_str()) { eprintln!("mode must be auto|ask|off"); return 2; }
             let mut c = Config::load(&config_path()); c.mode = value.clone(); let _ = c.save(&config_path());
@@ -111,16 +108,3 @@ fn lan_ip() -> String {
         .filter(|s| !s.is_empty()).unwrap_or_else(|| "127.0.0.1".into())
 }
 
-pub fn run_forever() {
-    let _ = ensure_cfg();
-    let mut w = Watcher::new(projects_dir());
-    let tz = local_tz();
-    loop {
-        let cfg = Config::load(&config_path());
-        w.scan_once(&pending_dir(), &cfg, Utc::now(), tz, &RealRunner);
-        for r in pending::due(&pending_dir(), Utc::now().timestamp()) {
-            resume::fire(&pending_dir(), &r.session_id, &cfg, Utc::now().timestamp(), &RealRunner, &crate::scheduler::which_path, "claude");
-        }
-        std::thread::sleep(std::time::Duration::from_secs(20));
-    }
-}
