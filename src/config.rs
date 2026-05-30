@@ -88,7 +88,7 @@ mod tests {
     fn roundtrip_camelcase() {
         let d = tempfile::tempdir().unwrap();
         let p = d.path().join("config.json");
-        let mut c = Config::default(); c.mode = "off".into();
+        let c = Config { mode: "off".into(), ..Config::default() };
         c.save(&p).unwrap();
         let raw = std::fs::read_to_string(&p).unwrap();
         assert!(raw.contains("\"defaultMessage\""));
@@ -115,7 +115,7 @@ mod tests {
     }
     #[test]
     fn message_fallback() {
-        let mut c = Config::default(); c.default_message = "D".into();
+        let mut c = Config { default_message: "D".into(), ..Config::default() };
         c.per_project.insert("/p".into(), ProjectCfg { mode: None, message: Some("P".into()) });
         assert_eq!(c.message_for(Some("/p")), "P");
         assert_eq!(c.message_for(Some("/q")), "D");

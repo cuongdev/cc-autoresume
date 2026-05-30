@@ -2,16 +2,19 @@ use chrono::{DateTime, Datelike, TimeZone, Utc};
 use chrono_tz::Tz;
 use regex::Regex;
 use std::str::FromStr;
+use std::sync::LazyLock;
+
+static TZ_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(([^)]+)\)").unwrap());
+static TIME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)(\d{1,2})(?::(\d{2}))?\s*(am|pm)").unwrap());
 
 /// `reset` e.g. "2:30am (Asia/Saigon)" or "4pm". `now_utc` is the current instant.
 /// `default_tz` is used when the string has no "(Zone)". Returns the epoch (secs)
 /// of the next occurrence of that wall-clock time, or None if unparseable.
 pub fn parse_reset(reset: &str, now_utc: DateTime<Utc>, default_tz: Tz) -> Option<i64> {
-    let tz = Regex::new(r"\(([^)]+)\)").unwrap()
-        .captures(reset)
+    let tz = TZ_RE.captures(reset)
         .and_then(|c| Tz::from_str(c.get(1).unwrap().as_str()).ok())
         .unwrap_or(default_tz);
-    let tm = Regex::new(r"(?i)(\d{1,2})(?::(\d{2}))?\s*(am|pm)").unwrap().captures(reset)?;
+    let tm = TIME_RE.captures(reset)?;
     let mut hour: u32 = tm.get(1).unwrap().as_str().parse().ok()?;
     hour %= 12;
     let minute: u32 = tm.get(2).map(|m| m.as_str().parse().unwrap_or(0)).unwrap_or(0);

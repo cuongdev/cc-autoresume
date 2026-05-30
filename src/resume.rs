@@ -85,7 +85,7 @@ mod tests {
     }
     fn lsof_yes(n: &str) -> Option<String> { if n == "lsof" { Some("lsof".into()) } else { None } }
     fn cfg(force: bool, max: u32) -> Config {
-        let mut c = Config::default(); c.force_headless = force; c.backoff.max_attempts = max; c.backoff.every_sec = 60; c
+        Config { force_headless: force, backoff: crate::config::Backoff { every_sec: 60, max_attempts: max }, ..Config::default() }
     }
     fn rec() -> Pending {
         Pending { session_id: "s1abcdef".into(), cwd: Some("/x".into()), transcript_path: "/t.jsonl".into(),
