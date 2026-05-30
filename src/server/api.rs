@@ -89,16 +89,11 @@ pub async fn fire_pending(State(s): State<AppState>, axum::extract::Path(id): ax
 }
 
 pub async fn open_terminal(State(s): State<AppState>, axum::extract::Path(id): axum::extract::Path<String>) -> impl IntoResponse {
-    let Some(rec) = pending::read(&s.pending_dir(), &id).or_else(|| {
-        stats::Stats::load(&s.stats_path()).recent.into_iter()
-            .find(|r| r.session_id == id)
-            .map(|r| pending::Pending { session_id: r.session_id, cwd: r.cwd, transcript_path: r.transcript_path,
-                reset_str: String::new(), fire_at: 0, message: String::new(), armed_at: 0, cancelled: false, confirmed: true, attempts: 0 })
-    }) else { return StatusCode::NOT_FOUND; };
-    let cwd = rec.cwd.unwrap_or_else(|| ".".into());
+    let Some(tp) = find_transcript(&s, &id) else { return StatusCode::NOT_FOUND; };
+    let cwd = crate::detect::resolve_cwd(&tp).unwrap_or_else(|| ".".into());
     let script = format!(
         "tell application \"Terminal\" to do script \"cd {} && claude --resume {}\"",
-        shell_quote(&cwd), &rec.session_id);
+        shell_quote(&cwd), &id);
     let out = s.runner.run(&["osascript".into(), "-e".into(), script], None);
     if out.code == 0 { StatusCode::OK } else { StatusCode::INTERNAL_SERVER_ERROR }
 }
@@ -503,6 +498,9 @@ mod tests {
         let cfg = crate::config::Config { token: "tk".into(), ..crate::config::Config::default() };
         cfg.save(&base.path().join("config.json")).unwrap();
         seed(base.path());
+        // open_terminal resolves via find_transcript, which requires a real transcript file
+        std::fs::create_dir_all(home.path().join(".claude/projects/p")).unwrap();
+        std::fs::write(home.path().join(".claude/projects/p/deadbeef.jsonl"), "{\"cwd\":\"/x\"}\n").unwrap();
         let rec = Arc::new(Rec(Mutex::new(vec![])));
         let state = crate::server::AppState {
             base: base.path().into(), home: home.path().into(), projects_dir: home.path().join(".claude/projects"),

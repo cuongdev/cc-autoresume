@@ -211,7 +211,7 @@
       </div></div>
   <div class="dfoot">
     <button class="btn" onclick="copyCmd()" data-tip="copyCmd">Copy <code>claude --resume</code></button>
-    <button class="btn" data-tip="openTerminal" onclick="api('/api/session/'+current.id+'/open',{method:'POST'}).then(()=>toast(t('toastTerm')))" data-i18n="openTerm"></button>
+    <button class="btn" data-tip="openTerminal" onclick="openTerminal()" data-i18n="openTerm"></button>
       <button class="btn" onclick="testResume()" data-i18n="testResume"></button>
     <span class="spacer"></span>
     <button class="btn go" id="resumeNow" data-tip="resumeNow" onclick="api('/api/pending/'+current.id+'/fire',{method:'POST'}).then(()=>{toast(t('toastResume'));loadState();})" data-i18n="resumeNow"></button>
@@ -498,7 +498,17 @@ function closeConvo(){
   if (convoES){ convoES.close(); convoES=null; }
   document.getElementById('scrim').classList.remove('open');document.getElementById('modal').classList.remove('open');
 }
-function copyCmd(){const cmd=`cd ${current.cwd} && claude --resume ${current.id}`;navigator.clipboard&&navigator.clipboard.writeText(cmd);toast(t('toastCopied')+': '+cmd);}
+function copyText(s){
+  if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(s); return true; }
+  const ta=document.createElement('textarea'); ta.value=s; ta.style.position='fixed'; ta.style.top='0'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.focus(); ta.select(); let ok=false; try{ ok=document.execCommand('copy'); }catch(e){} document.body.removeChild(ta); return ok;
+}
+function copyCmd(){const cmd=`cd ${current.cwd} && claude --resume ${current.id}`; if(copyText(cmd)) toast(t('toastCopied')+': '+cmd); else prompt(t('toastCopied')+':', cmd);}
+function openTerminal(){
+  api('/api/session/'+current.id+'/open',{method:'POST'}).then(r=>{
+    toast(r.ok ? t('toastTerm') : (lang==='vi' ? 'Mở Terminal thất bại — cấp quyền Automation cho daemon, hoặc dùng Copy' : 'Open Terminal failed — grant the daemon Automation permission, or use Copy'));
+  }).catch(()=>toast('error'));
+}
 function saveSessionMsg(){
   savePreset();
 }
@@ -538,7 +548,7 @@ function rotate(){
     location.search = '?token=' + d.token;
   });
 }
-function copyUrl(){navigator.clipboard&&navigator.clipboard.writeText(lanUrl());toast(t('toastCopied'));}
+function copyUrl(){ if(copyText(lanUrl())) toast(t('toastCopied')); else prompt('URL:', lanUrl()); }
 document.getElementById('setbtn').onclick=openSettings;
 
 // tooltips
