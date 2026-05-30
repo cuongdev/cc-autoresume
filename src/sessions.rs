@@ -123,11 +123,56 @@ fn is_noise_title(text: &str) -> bool {
         || t.starts_with("[Request interrupted")
 }
 
-/// First genuine user-prompt snippet (≤60 chars, whitespace-collapsed) for a friendly label.
+/// Collapse whitespace, drop noise lines, and truncate to a ≤60-char label.
+fn snippet(text: &str) -> Option<String> {
+    let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let collapsed = collapsed.trim();
+    if collapsed.is_empty() || is_noise_title(collapsed) {
+        return None;
+    }
+    let s: String = collapsed.chars().take(60).collect();
+    Some(if collapsed.chars().count() > 60 { format!("{s}…") } else { s })
+}
+
+/// A friendly session label: the most recent user prompt if available, else the
+/// first genuine prompt. Falls back to `None` (the UI then shows the path).
 fn title_fast(path: &Path) -> Option<String> {
+    last_prompt_fast(path).or_else(|| first_prompt_fast(path))
+}
+
+/// The most recent user prompt, read from the trailing `last-prompt` record Claude
+/// Code maintains. Reads only the tail of the file so it stays cheap on huge logs.
+fn last_prompt_fast(path: &Path) -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    let window = len.min(256 * 1024);
+    f.seek(SeekFrom::Start(len - window)).ok()?;
+    let mut buf = vec![0u8; window as usize];
+    f.read_exact(&mut buf).ok()?;
+    let text = String::from_utf8_lossy(&buf);
+    for line in text.lines().rev() {
+        if !line.contains("\"last-prompt\"") {
+            continue;
+        }
+        let Ok(o) = serde_json::from_str::<serde_json::Value>(line) else { continue };
+        if o.get("type").and_then(|t| t.as_str()) != Some("last-prompt") {
+            continue;
+        }
+        if let Some(lp) = o.get("lastPrompt").and_then(|v| v.as_str()) {
+            if let Some(s) = snippet(lp) {
+                return Some(s);
+            }
+        }
+    }
+    None
+}
+
+/// First genuine user-prompt snippet (scans the head of the transcript).
+fn first_prompt_fast(path: &Path) -> Option<String> {
     use std::io::{BufRead, BufReader};
     let f = std::fs::File::open(path).ok()?;
-    for line in BufReader::new(f).lines().take(40).map_while(Result::ok) {
+    for line in BufReader::new(f).lines().take(80).map_while(Result::ok) {
         let Ok(o) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
         if o.get("type").and_then(|t| t.as_str()) != Some("user") { continue; }
         // skip meta/system-injected turns (caveats, command output, etc.)
@@ -144,11 +189,9 @@ fn title_fast(path: &Path) -> Option<String> {
                 .to_string(),
             _ => continue,
         };
-        let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
-        let collapsed = collapsed.trim();
-        if collapsed.is_empty() || is_noise_title(collapsed) { continue; }
-        let snippet: String = collapsed.chars().take(60).collect();
-        return Some(if collapsed.chars().count() > 60 { format!("{snippet}…") } else { snippet });
+        if let Some(s) = snippet(&text) {
+            return Some(s);
+        }
     }
     None
 }
@@ -210,7 +253,32 @@ mod tests {
             r#"{"type":"user","message":{"content":"Refactor the auth module please"}}"#,
         ];
         std::fs::write(&fp, lines.join("\n") + "\n").unwrap();
+        // no last-prompt record here → falls back to first genuine prompt
         assert_eq!(title_fast(&fp).as_deref(), Some("Refactor the auth module please"));
+    }
+
+    #[test]
+    fn title_prefers_recent_last_prompt() {
+        let d = tempfile::tempdir().unwrap();
+        let fp = d.path().join("s.jsonl");
+        let lines = [
+            r#"{"type":"user","message":{"content":"Initial task: set up the project"}}"#,
+            r#"{"type":"last-prompt","lastPrompt":"now add pagination to the list","sessionId":"s"}"#,
+        ];
+        std::fs::write(&fp, lines.join("\n") + "\n").unwrap();
+        assert_eq!(title_fast(&fp).as_deref(), Some("now add pagination to the list"));
+    }
+
+    #[test]
+    fn last_prompt_skips_noise_falls_back() {
+        let d = tempfile::tempdir().unwrap();
+        let fp = d.path().join("s.jsonl");
+        let lines = [
+            r#"{"type":"user","message":{"content":"Build the dashboard"}}"#,
+            r#"{"type":"last-prompt","lastPrompt":"<command-name>/clear</command-name>","sessionId":"s"}"#,
+        ];
+        std::fs::write(&fp, lines.join("\n") + "\n").unwrap();
+        assert_eq!(title_fast(&fp).as_deref(), Some("Build the dashboard"));
     }
 
     #[test]
