@@ -1,34 +1,27 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use serde_json::json;
 use crate::{account, config::Config, pending, stats, server::AppState};
 use chrono::Utc;
 use crate::{resume, scheduler};
 
-pub async fn get_state(State(s): State<AppState>) -> impl IntoResponse {
-    let now = Utc::now().timestamp();
+pub async fn state_json(s: &AppState) -> serde_json::Value {
+    let now = chrono::Utc::now().timestamp();
     let cfg = Config::load(&s.config_path());
     let st = stats::Stats::load(&s.stats_path());
     let pend = pending::list_all(&s.pending_dir());
-    let next_reset = pend.iter()
-        .filter(|r| !r.cancelled && r.confirmed && r.fire_at > now)
-        .map(|r| r.fire_at).min();
+    let next_reset = pend.iter().filter(|r| !r.cancelled && r.confirmed && r.fire_at > now).map(|r| r.fire_at).min();
     let status = s.status.read().await.clone();
-    Json(json!({
+    serde_json::json!({
         "account": account::read(&s.home),
-        "mode": cfg.mode,
-        "forceHeadless": cfg.force_headless,
-        "defaultMessage": cfg.default_message,
-        "perProject": cfg.per_project,
-        "watcher": status,
-        "stats": {
-            "limitHits7d": st.hits_7d(now),
-            "autoResumes": st.auto_resumes,
-            "sessions7d": stats::sessions_7d(&s.home, now),
-            "nextResetEpoch": next_reset,
-        },
-        "pending": pend,
-        "recent": st.recent,
-    }))
+        "mode": cfg.mode, "forceHeadless": cfg.force_headless, "defaultMessage": cfg.default_message,
+        "perProject": cfg.per_project, "watcher": status,
+        "stats": { "limitHits7d": st.hits_7d(now), "autoResumes": st.auto_resumes,
+            "sessions7d": stats::sessions_7d(&s.home, now), "nextResetEpoch": next_reset },
+        "pending": pend, "recent": st.recent,
+    })
+}
+
+pub async fn get_state(State(s): State<AppState>) -> impl IntoResponse {
+    Json(state_json(&s).await)
 }
 
 #[derive(serde::Deserialize)]
