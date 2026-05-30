@@ -1,2 +1,494 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><title>cc-autoresume</title></head>
-<body><h1 id="app">cc-autoresume dashboard</h1></body></html>
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cc-autoresume — dashboard (mock)</title>
+<style>
+  :root{--accent:#b8f23a;--accent-dim:#7c9e2a;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;--r:14px;}
+  [data-theme="dark"]{--bg:#0a0c11;--bg2:#0e1118;--surface:#12161f;--surface2:#161b26;--line:#222a38;--line2:#2c3647;
+    --txt:#e7ecf3;--muted:#8a97ab;--faint:#5c6677;--accent-ink:#b8f23a;
+    --green:#3ad17a;--amber:#f5b53a;--red:#ff6b6b;--blue:#5aa7ff;--violet:#a78bfa;
+    --bggrad:radial-gradient(1200px 600px at 85% -10%,rgba(184,242,58,.06),transparent 60%),radial-gradient(900px 500px at 0% 0%,rgba(90,167,255,.05),transparent 55%);
+    --shadow:0 16px 40px -24px rgba(0,0,0,.8);--segbg:#0b0e14;--inbg:#0b0e14;--tipbg:#1c2230;}
+  [data-theme="light"]{--bg:#eef1f6;--bg2:#f8fafc;--surface:#fff;--surface2:#f1f4f9;--line:#e4e8f0;--line2:#d2d9e4;
+    --txt:#17202e;--muted:#586474;--faint:#97a1b1;--accent-ink:#5f8417;
+    --green:#1ea860;--amber:#bf8500;--red:#e0484d;--blue:#2f7fe0;--violet:#7c5cf0;
+    --bggrad:radial-gradient(1100px 560px at 88% -12%,rgba(184,242,58,.18),transparent 60%),radial-gradient(800px 480px at -5% 0%,rgba(90,167,255,.12),transparent 55%);
+    --shadow:0 14px 36px -22px rgba(40,60,90,.4);--segbg:#eef1f6;--inbg:#f4f6fa;--tipbg:#222a38;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--sans);background:var(--bggrad),var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased;letter-spacing:.1px;min-height:100%;transition:background .25s,color .25s}
+  .wrap{max-width:980px;margin:0 auto;padding:30px 22px 60px}
+
+  .topbar{display:flex;align-items:center;gap:12px;margin-bottom:22px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(150deg,var(--surface2),var(--bg));border:1px solid var(--line2);display:grid;place-items:center;box-shadow:var(--shadow)}
+  .logo svg{width:22px;height:22px}
+  .brand h1{font-size:18px;font-weight:650;letter-spacing:-.2px}
+  .brand .sub{font-size:12px;color:var(--muted);margin-top:1px}
+  .spacer{flex:1}
+  .acct{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 12px 5px 6px;cursor:default}
+  .avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(140deg,var(--accent),var(--accent-dim));color:#0a0c11;font-weight:700;display:grid;place-items:center;font-size:13px}
+  .acct .ae{font-size:12.5px;font-weight:600;line-height:1.1}
+  .acct .ao{font-size:11px;color:var(--muted);margin-top:1px}
+  .iconbtn{height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:0 11px;font-size:12.5px;font-weight:600;transition:.15s}
+  .iconbtn:hover{color:var(--txt);border-color:var(--line2)}
+  .iconbtn svg{width:17px;height:17px}
+
+  .card{background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+  .statbar{display:flex;margin-bottom:24px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:linear-gradient(180deg,var(--surface),var(--bg2));box-shadow:var(--shadow)}
+  .stat{flex:1;padding:13px 16px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--line);min-width:0}
+  .stat:last-child{border-right:0}
+  .stat .k{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);font-weight:600;display:flex;align-items:center;gap:5px;white-space:nowrap}
+  .stat .v{font-size:18px;font-weight:680;letter-spacing:-.4px;font-family:var(--mono);margin-top:2px;display:flex;align-items:center;gap:7px}
+  .stat .v.accent{color:var(--accent-ink)}
+  .stat .sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  @media(max-width:660px){.statbar{flex-wrap:wrap}.stat{flex:1 1 50%;border-bottom:1px solid var(--line)}}
+
+  .controls{padding:18px 20px;display:flex;align-items:center;gap:26px;flex-wrap:wrap;margin-bottom:24px}
+  .ctl{display:flex;flex-direction:column;gap:8px}
+  .ctl .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--faint);font-weight:600;display:flex;align-items:center;gap:6px}
+  .help{width:15px;height:15px;border-radius:50%;border:1px solid var(--line2);color:var(--faint);font-size:10px;font-weight:700;display:inline-grid;place-items:center;cursor:help;font-family:var(--sans)}
+  .help:hover{color:var(--accent-ink);border-color:var(--accent-dim)}
+  .seg{display:inline-flex;background:var(--segbg);border:1px solid var(--line);border-radius:10px;padding:3px}
+  .seg button{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--muted);background:none;border:0;padding:7px 15px;border-radius:7px;cursor:pointer;transition:.16s}
+  .seg button:hover{color:var(--txt)}
+  .seg button.on{background:var(--surface2);color:var(--txt);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+  .seg button.on[data-m="auto"]{background:rgba(184,242,58,.15);color:var(--accent-ink)}
+  .switch{display:flex;align-items:center;gap:11px;cursor:pointer;user-select:none}
+  .track{width:46px;height:26px;border-radius:999px;background:var(--surface2);border:1px solid var(--line2);position:relative;transition:.2s}
+  .track i{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--faint);transition:.2s}
+  .switch.on .track{background:rgba(184,242,58,.25);border-color:var(--accent-dim)}
+  .switch.on .track i{left:22px;background:var(--accent-ink)}
+  .switch span{font-size:13px;color:var(--muted)}
+  .msgrow{margin-left:auto;display:flex;flex-direction:column;gap:8px;min-width:300px;flex:1}
+  .msgbox{display:flex;gap:8px}
+  .msgbox input{flex:1;font-family:var(--sans);font-size:13px;color:var(--txt);background:var(--inbg);border:1px solid var(--line);border-radius:9px;padding:9px 12px;outline:none}
+  .msgbox input:focus{border-color:var(--line2);box-shadow:0 0 0 3px rgba(90,167,255,.12)}
+  .btn{font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;border-radius:9px;padding:9px 14px;border:1px solid var(--line2);background:var(--surface2);color:var(--txt);transition:.15s;display:inline-flex;align-items:center;gap:7px}
+  .btn:hover{border-color:var(--faint)}
+  .btn code{font-family:var(--mono);font-size:12px;opacity:.85}
+  .btn.danger{color:var(--red);border-color:color-mix(in srgb,var(--red) 30%,transparent);background:color-mix(in srgb,var(--red) 8%,transparent)}
+  .btn.go{color:#0a0c11;background:var(--accent);border-color:var(--accent)}
+  .btn.go:hover{background:#c8ff4a}
+  .btn.sm{padding:6px 11px;font-size:12px}
+
+  .sec-h{display:flex;align-items:center;gap:9px;margin:0 4px 14px}
+  .sec-h h2{font-size:14px;font-weight:650}
+  .count{font-size:12px;color:var(--faint);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+  .sec-h.recent{margin-top:30px}
+  .grid{display:flex;flex-direction:column;gap:14px}
+  .pend{display:flex;align-items:center;gap:20px;padding:18px 20px;cursor:pointer;transition:.15s;position:relative}
+  .pend:hover{border-color:var(--line2);transform:translateY(-1px)}
+  .view-hint{position:absolute;top:14px;right:18px;font-size:11px;color:var(--faint);opacity:0;transition:.15s}
+  .pend:hover .view-hint{opacity:1}
+  .ring{position:relative;width:78px;height:78px;flex:none}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .time{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--mono);font-size:14px;font-weight:600;color:var(--txt)}
+  .info{flex:1;min-width:0}
+  .info .top{display:flex;align-items:center;gap:10px;margin-bottom:5px}
+  .sid{font-family:var(--mono);font-size:13px;color:var(--blue);font-weight:600}
+  .pill{font-size:11px;font-weight:700;letter-spacing:.04em;padding:3px 9px;border-radius:999px;text-transform:uppercase;cursor:help}
+  .pill.armed{color:var(--green);background:color-mix(in srgb,var(--green) 13%,transparent);border:1px solid color-mix(in srgb,var(--green) 28%,transparent)}
+  .pill.ask{color:var(--amber);background:color-mix(in srgb,var(--amber) 13%,transparent);border:1px solid color-mix(in srgb,var(--amber) 28%,transparent)}
+  .pill.backoff{color:var(--blue);background:color-mix(in srgb,var(--blue) 13%,transparent);border:1px solid color-mix(in srgb,var(--blue) 28%,transparent)}
+  .pill.done{color:var(--violet);background:color-mix(in srgb,var(--violet) 13%,transparent);border:1px solid color-mix(in srgb,var(--violet) 28%,transparent)}
+  .cwd{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta{font-size:12px;color:var(--faint);margin-top:5px}
+  .meta b{color:var(--muted);font-weight:600}
+  .actions{display:flex;gap:8px;flex:none}
+  .recent-row{display:flex;align-items:center;gap:14px;padding:13px 18px;cursor:pointer;transition:.15s}
+  .recent-row:hover{border-color:var(--line2)}.recent-row .sid{font-size:12px}.recent-row .cwd{flex:1}
+
+  .foot{margin-top:30px;text-align:center;font-size:12px;color:var(--faint);line-height:1.7}
+  .foot code{font-family:var(--mono);color:var(--muted);background:var(--surface);padding:2px 6px;border-radius:5px}
+  .mockbadge{display:inline-block;margin-bottom:14px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);background:color-mix(in srgb,var(--amber) 12%,transparent);border:1px solid color-mix(in srgb,var(--amber) 26%,transparent);padding:5px 11px;border-radius:999px}
+
+  .scrim{position:fixed;inset:0;background:rgba(4,6,10,.55);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:.22s;z-index:40}
+  .scrim.open{opacity:1;pointer-events:auto}
+  .modal{position:fixed;inset:0;display:grid;place-items:center;padding:26px;pointer-events:none;z-index:50}
+  .mcard{width:min(720px,95vw);max-height:86vh;display:flex;flex-direction:column;background:var(--bg2);border:1px solid var(--line2);border-radius:18px;box-shadow:0 40px 90px -30px rgba(0,0,0,.6);opacity:0;transform:scale(.96) translateY(10px);transition:.24s cubic-bezier(.4,0,.2,1);pointer-events:auto}
+  .modal.open .mcard{opacity:1;transform:none}
+  .dhead{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+  .dhead .sid{font-size:14px}.dhead .dcwd{font-size:12px;color:var(--faint);margin-top:3px}
+  .live{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--green);margin-left:12px}
+  .live .dot{width:7px;height:7px}
+  .close{margin-left:auto;width:32px;height:32px;border-radius:8px;border:1px solid var(--line2);background:var(--surface2);color:var(--muted);cursor:pointer;font-size:15px}
+  .close:hover{color:var(--txt)}
+  .convo{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+  .msg{display:flex;flex-direction:column;gap:5px;animation:fade .3s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .role{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+  .msg.user .role{color:var(--blue)}.msg.asst .role{color:var(--accent-ink)}
+  .bubble{font-size:13.5px;line-height:1.6;color:var(--txt);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 14px}
+  .msg.user .bubble{background:color-mix(in srgb,var(--blue) 7%,transparent);border-color:color-mix(in srgb,var(--blue) 18%,transparent)}
+  .bubble code{font-family:var(--mono);font-size:12.5px;background:var(--inbg);padding:1.5px 5px;border-radius:5px;color:var(--accent-ink)}
+  .tool{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--inbg);border:1px solid var(--line);border-radius:8px;padding:8px 11px}
+  .tool .tname{color:var(--violet);font-weight:600}
+  .dmsg{padding:14px 20px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+  .dmsg .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--faint);font-weight:600;display:flex;gap:7px;align-items:center}
+  .dmsg .ov{font-size:10px;color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 16%,transparent);padding:2px 7px;border-radius:999px;letter-spacing:.02em;text-transform:none;display:none}
+  .dmsg.overridden .ov{display:inline}
+  .dmsg .row{display:flex;gap:8px}
+  .dmsg input{flex:1;font-family:var(--sans);font-size:13px;color:var(--txt);background:var(--inbg);border:1px solid var(--line);border-radius:9px;padding:9px 12px;outline:none}
+  .dmsg input:focus{border-color:var(--line2);box-shadow:0 0 0 3px rgba(90,167,255,.12)}
+  .dfoot{padding:14px 20px;border-top:1px solid var(--line);display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--txt);color:var(--bg);font-size:13px;font-weight:600;padding:11px 18px;border-radius:10px;opacity:0;transition:.25s;z-index:70;pointer-events:none;max-width:90vw}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .set-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);font-weight:600;margin-bottom:7px;display:flex;align-items:center;gap:6px}
+  .set-row{display:flex;gap:8px}
+  .set-row input{flex:1;font-family:var(--mono);font-size:12.5px;color:var(--txt);background:var(--inbg);border:1px solid var(--line);border-radius:9px;padding:9px 12px;outline:none}
+  .set-sub{font-size:12px;color:var(--muted);line-height:1.5}
+  .set-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .set-val{font-size:13px;color:var(--txt)}.set-val.mono{font-family:var(--mono);font-size:11.5px;color:var(--muted);word-break:break-all}
+  .qr{width:104px;height:104px;flex:none;border-radius:10px;padding:8px;background:#fff;display:grid;grid-template-columns:repeat(11,1fr);gap:0}
+  .qr i{background:#0a0c11}.qr i.off{background:#fff}
+  #tip{position:fixed;z-index:80;background:var(--tipbg);color:#fff;font-size:12.5px;line-height:1.5;padding:9px 12px;border-radius:9px;max-width:300px;box-shadow:0 10px 30px -8px rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .12s;border:1px solid rgba(255,255,255,.08)}
+  #tip.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="#b8f23a" stroke="#b8f23a" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+      <div><h1>cc-autoresume</h1><div class="sub" data-i18n="sub"></div></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="acct" data-tip="account"><div class="avatar">C</div><div><div class="ae">—</div><div class="ao"></div></div></div>
+    <button class="iconbtn" id="langbtn">🌐 <span id="langlabel">EN</span></button>
+    <button class="iconbtn" id="setbtn" data-tip="settings">⚙</button>
+    <button class="iconbtn" id="themebtn"></button>
+  </div>
+
+  <div class="statbar">
+    <div class="stat"><span class="k" data-tip="watching" data-i18n="watcher"></span><span class="v"><span class="dot"></span><span style="font-size:14px" data-i18n="watching_on"></span></span><span class="sub"><span data-i18n="lastscan"></span> <b id="lastscan">2s</b></span></div>
+    <div class="stat"><span class="k" data-tip="nextReset" data-i18n="next_reset"></span><span class="v accent" id="st-next">—</span><span class="sub" id="st-nextin">—</span></div>
+    <div class="stat"><span class="k" data-tip="limitHits" data-i18n="hits7d"></span><span class="v">3</span><span class="sub" data-i18n="hits_last"></span></div>
+    <div class="stat"><span class="k" data-tip="autoResumes" data-i18n="resumes"></span><span class="v">12</span><span class="sub" data-i18n="alltime"></span></div>
+    <div class="stat"><span class="k" data-tip="sessions7d" data-i18n="sess7d"></span><span class="v">47</span><span class="sub" data-i18n="from_stats"></span></div>
+  </div>
+
+  <div class="card controls">
+    <div class="ctl"><span class="lbl"><span data-i18n="mode"></span><span class="help" data-tip="mode">?</span></span>
+      <div class="seg" id="seg"><button class="on" data-m="auto" data-tip="modeAuto" data-i18n="auto"></button><button data-m="ask" data-tip="modeAsk" data-i18n="ask"></button><button data-m="off" data-tip="modeOff" data-i18n="off"></button></div></div>
+    <div class="ctl"><span class="lbl"><span data-i18n="forceHeadless"></span><span class="help" data-tip="forceHeadless">?</span></span>
+      <label class="switch" id="fh"><span class="track"><i></i></span><span data-i18n="off_l"></span></label></div>
+    <div class="ctl msgrow"><span class="lbl"><span data-i18n="resumeMsg"></span><span class="help" data-tip="resumeMessage">?</span></span>
+      <div class="msgbox"><input value="Quota đã reset. Đọc lại việc đang dở và tiếp tục từ chỗ dừng, không hỏi lại."><button class="btn" data-i18n="save"></button></div></div>
+  </div>
+
+  <div class="sec-h"><h2 data-i18n="pending"></h2><span class="count" id="pcount">3</span><span class="help" data-tip="pending">?</span></div>
+  <div class="grid" id="grid"></div>
+
+  <div class="sec-h recent"><h2 data-i18n="recent"></h2><span class="count">1</span></div>
+  <div class="grid">
+    <div class="card recent-row" onclick="openConvo('1f90ac22','~/projects/idlogiq.com/onyx','done')">
+      <span class="pill done" data-tip="stateDone" data-i18n="st_done"></span><span class="sid">1f90ac22</span>
+      <span class="cwd">~/projects/idlogiq.com/onyx</span><span class="meta" data-i18n="resumed_ago"></span>
+      <span class="view-hint">→</span></div>
+  </div>
+
+  <div class="foot">
+    <span data-i18n="foot"></span> <code>http://&lt;lan-ip&gt;:7317/?token=…</code></div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeConvo()"></div>
+<div class="modal" id="modal"><div class="mcard">
+  <div class="dhead"><div><div class="sid" id="d-sid">—</div><div class="dcwd" id="d-cwd">—</div></div>
+    <div class="live" id="d-live"><span class="dot"></span> Live</div><button class="close" onclick="closeConvo()">✕</button></div>
+  <div class="convo" id="convo"></div>
+  <div class="dmsg" id="dmsg"><span class="lbl"><span data-i18n="msgThis"></span><span class="ov" data-i18n="overrides"></span><span class="help" data-tip="resumeMessageSession">?</span></span>
+    <div class="row"><input id="d-msg"><button class="btn" onclick="saveSessionMsg()" data-i18n="save"></button></div></div>
+  <div class="dfoot">
+    <button class="btn" onclick="copyCmd()" data-tip="copyCmd">Copy <code>claude --resume</code></button>
+    <button class="btn" data-tip="openTerminal" onclick="api('/api/session/'+current.id+'/open',{method:'POST'}).then(()=>toast(t('toastTerm')))" data-i18n="openTerm"></button>
+    <span class="spacer"></span>
+    <button class="btn go" id="resumeNow" data-tip="resumeNow" onclick="api('/api/pending/'+current.id+'/fire',{method:'POST'}).then(()=>{toast(t('toastResume'));loadState();})" data-i18n="resumeNow"></button>
+  </div>
+</div></div>
+<div class="scrim" id="sscrim" onclick="closeSettings()"></div>
+<div class="modal" id="smodal"><div class="mcard" style="width:min(520px,95vw)">
+  <div class="dhead"><div class="sid" data-i18n="settings" style="color:var(--txt)"></div><button class="close" onclick="closeSettings()">✕</button></div>
+  <div style="padding:20px;display:flex;flex-direction:column;gap:18px">
+    <div>
+      <div class="set-lbl" data-i18n="dashUrl"></div>
+      <div class="set-row"><input id="set-url" readonly><button class="btn sm" onclick="copyUrl()" data-i18n="copy"></button></div>
+    </div>
+    <div style="display:flex;gap:18px;align-items:center">
+      <div id="qr" class="qr"></div>
+      <div class="set-sub" data-i18n="scanPhone"></div>
+    </div>
+    <div>
+      <div class="set-lbl"><span data-i18n="tokenLbl"></span><span class="help" data-tip="regen">?</span></div>
+      <div class="set-row"><input id="set-token" readonly type="password"><button class="btn sm" id="revealbtn" onclick="toggleReveal()" data-i18n="reveal"></button><button class="btn sm danger" onclick="rotate()" data-i18n="regen"></button></div>
+      <div class="set-sub" data-i18n="regenWarn" style="margin-top:7px"></div>
+    </div>
+    <div class="set-grid">
+      <div><div class="set-lbl" data-i18n="portLbl"></div><div class="set-val">7317 <span class="set-sub" data-i18n="portNote"></span></div></div>
+      <div><div class="set-lbl" data-i18n="configAt"></div><div class="set-val mono">~/.claude/auto-resume/config.json</div></div>
+    </div>
+  </div>
+</div></div>
+<div class="toast" id="toast"></div>
+<div id="tip"></div>
+
+<script>
+const urlToken = new URLSearchParams(location.search).get('token');
+if (urlToken) localStorage.setItem('cc-token', urlToken);
+const TOKEN = urlToken || localStorage.getItem('cc-token') || '';
+async function api(path, opts={}) {
+  const o = Object.assign({ headers: {} }, opts);
+  o.headers['Authorization'] = 'Bearer ' + TOKEN;
+  if (o.body) o.headers['Content-Type'] = 'application/json';
+  return fetch(path, o);
+}
+function sseUrl(path){ return path + (path.includes('?')?'&':'?') + 'token=' + encodeURIComponent(TOKEN); }
+let STATE = { pending: [], recent: [], account: null, mode: 'auto', forceHeadless: false, defaultMessage: '', stats: {}, watcher: {} };
+let current = null;
+
+const I18N={
+  en:{sub:"auto-continue Claude Code when quota resets",watcher:"Watcher",watching_on:"Watching",lastscan:"last scan",
+    next_reset:"Next reset",hits7d:"Limit hits · 7d",hits_last:"last: today 1:24pm",resumes:"Auto-resumes",alltime:"all-time",
+    sess7d:"Sessions · 7d",from_stats:"from Claude stats",mode:"Mode",auto:"Auto",ask:"Ask",off:"Off",
+    forceHeadless:"Force headless",off_l:"off",on_l:"on",resumeMsg:"Resume message · global",save:"Save",
+    pending:"Pending resumes",recent:"Recent",resumed_ago:"resumed 3m ago · running",
+    foot:"Served by the daemon at",msgThis:"Resume message · this session",overrides:"overrides global",
+    openTerm:"Open in Terminal",resumeNow:"Resume now",st_armed:"Armed",st_ask:"Awaiting confirm",st_backoff:"Backing off",st_done:"Resumed",
+    you:"You",resetsAt:"resets",inWord:"in",attempt:"attempt",retrying:"retrying every 5m",viewConvo:"View conversation →",
+    armNow:"Arm now",cancel:"Cancel",usingGlobal:"(using global default)",noPending:"no pending",
+    toastTerm:"Opening Terminal on this Mac… (host only)",toastResume:"Resuming now…",toastCopied:"Copied",toastSaved:"Saved message for",toastCleared:"Cleared — using global default",
+    // tooltips
+    tip_account:"The Claude account this daemon watches (read from ~/.claude.json).",
+    tip_watching:"The background watcher is running and scanning transcripts for limit messages.",
+    tip_nextReset:"When the soonest pending session will auto-resume.",
+    tip_limitHits:"Times a usage limit was detected in the last 7 days.",
+    tip_autoResumes:"Total sessions successfully auto-resumed.",
+    tip_sessions7d:"Active Claude Code sessions in the last 7 days (from Claude's local stats-cache).",
+    tip_mode:"How cc-autoresume reacts when a session hits its usage limit.",
+    tip_modeAuto:"Auto — automatically resume the session when quota resets. Set it once and walk away.",
+    tip_modeAsk:"Ask — when a limit is hit, wait for you to confirm (Arm) before scheduling a resume.",
+    tip_modeOff:"Off — never auto-resume; just send a notification.",
+    tip_forceHeadless:"Resume in the background even if the old terminal window is still open. Off = if a live window exists, just nudge you (avoids two writers on one session).",
+    tip_resumeMessage:"The message sent to Claude when a session resumes. Global default for every session.",
+    tip_resumeMessageSession:"Override the resume message for just this session — useful because each session does a different task. Empty = use the global default.",
+    tip_pending:"Sessions that hit their limit and are scheduled to auto-resume when quota resets.",
+    tip_stateDone:"This session was resumed and is running. Click to watch its conversation live.",
+    tip_copyCmd:"Copy the `claude --resume` command to paste into any terminal.",
+    tip_openTerminal:"Open this session in a terminal on this Mac and run claude --resume.",
+    tip_resumeNow:"Resume immediately instead of waiting for the reset time.",
+    settings:"Settings",dashUrl:"Dashboard URL",tokenLbl:"Access token",regen:"Regenerate",
+    regenWarn:"Regenerating invalidates the current link — reopen with the new URL afterwards.",
+    portLbl:"Port",portNote:"change in config.json, then restart the daemon",
+    configAt:"Config file",reveal:"Reveal",hide:"Hide",scanPhone:"Scan to open on your phone",copy:"Copy",rotated:"New token generated",
+    tip_settings:"Dashboard access — URL, QR for your phone, and the access token.",
+    tip_regen:"Generate a new token. Old links and open tabs stop working until reopened with the new URL."},
+  vi:{sub:"tự tiếp tục Claude Code khi quota reset",watcher:"Watcher",watching_on:"Đang theo dõi",lastscan:"quét lần cuối",
+    next_reset:"Reset kế tiếp",hits7d:"Dính limit · 7 ngày",hits_last:"gần nhất: hôm nay 1:24pm",resumes:"Số lần tự resume",alltime:"từ trước tới nay",
+    sess7d:"Phiên · 7 ngày",from_stats:"từ Claude stats",mode:"Chế độ",auto:"Tự động",ask:"Hỏi",off:"Tắt",
+    forceHeadless:"Buộc chạy nền",off_l:"tắt",on_l:"bật",resumeMsg:"Tin nhắn resume · global",save:"Lưu",
+    pending:"Đang chờ resume",recent:"Gần đây",resumed_ago:"đã resume 3 phút trước · đang chạy",
+    foot:"Daemon phục vụ tại",msgThis:"Tin nhắn resume · phiên này",overrides:"ghi đè global",
+    openTerm:"Mở trong Terminal",resumeNow:"Resume ngay",st_armed:"Đã lên lịch",st_ask:"Chờ xác nhận",st_backoff:"Đang thử lại",st_done:"Đã resume",
+    you:"Bạn",resetsAt:"reset lúc",inWord:"sau",attempt:"lần thử",retrying:"thử lại mỗi 5 phút",viewConvo:"Xem hội thoại →",
+    armNow:"Xác nhận",cancel:"Huỷ",usingGlobal:"(đang dùng mặc định global)",noPending:"không có",
+    toastTerm:"Đang mở Terminal trên máy này… (chỉ host)",toastResume:"Đang resume…",toastCopied:"Đã copy",toastSaved:"Đã lưu tin nhắn cho",toastCleared:"Đã xoá — dùng mặc định global",
+    tip_account:"Tài khoản Claude mà daemon đang theo dõi (đọc từ ~/.claude.json).",
+    tip_watching:"Watcher nền đang chạy và quét transcript để bắt message limit.",
+    tip_nextReset:"Thời điểm session gần nhất sẽ tự resume.",
+    tip_limitHits:"Số lần dính usage limit trong 7 ngày qua.",
+    tip_autoResumes:"Tổng số session đã tự resume thành công.",
+    tip_sessions7d:"Số phiên Claude Code hoạt động trong 7 ngày qua (từ stats-cache local của Claude).",
+    tip_mode:"Cách cc-autoresume phản ứng khi một session dính usage limit.",
+    tip_modeAuto:"Tự động — tự resume khi quota reset. Set một lần rồi đi làm việc khác.",
+    tip_modeAsk:"Hỏi — khi dính limit, chờ bạn bấm xác nhận (Arm) thì mới lên lịch resume.",
+    tip_modeOff:"Tắt — không bao giờ tự resume; chỉ gửi thông báo.",
+    tip_forceHeadless:"Resume chạy nền kể cả khi cửa sổ terminal cũ vẫn mở. Tắt = nếu còn cửa sổ sống thì chỉ nhắc bạn (tránh 2 tiến trình ghi cùng 1 session).",
+    tip_resumeMessage:"Câu gửi cho Claude khi resume. Mặc định global cho mọi session.",
+    tip_resumeMessageSession:"Ghi đè câu resume riêng cho session này — hữu ích vì mỗi session làm task khác nhau. Để trống = dùng mặc định global.",
+    tip_pending:"Các session đã dính limit và được lên lịch tự resume khi quota reset.",
+    tip_stateDone:"Session này đã resume và đang chạy. Bấm để xem hội thoại live.",
+    tip_copyCmd:"Copy lệnh `claude --resume` để dán vào terminal bất kỳ.",
+    tip_openTerminal:"Mở session này trong terminal trên máy này và chạy claude --resume.",
+    tip_resumeNow:"Resume ngay lập tức thay vì đợi tới giờ reset.",
+    settings:"Cài đặt",dashUrl:"URL dashboard",tokenLbl:"Token truy cập",regen:"Đặt lại token",
+    regenWarn:"Đặt lại sẽ vô hiệu link hiện tại — mở lại bằng URL mới sau đó.",
+    portLbl:"Port",portNote:"đổi trong config.json rồi khởi động lại daemon",
+    configAt:"File cấu hình",reveal:"Hiện",hide:"Ẩn",scanPhone:"Quét để mở trên điện thoại",copy:"Copy",rotated:"Đã tạo token mới",
+    tip_settings:"Truy cập dashboard — URL, QR cho điện thoại, và token truy cập.",
+    tip_regen:"Tạo token mới. Link cũ và tab đang mở sẽ ngừng hoạt động cho tới khi mở lại bằng URL mới."}
+};
+let lang=localStorage.getItem('cc-lang')||'vi';
+function t(k){return (I18N[lang][k]!==undefined?I18N[lang][k]:(I18N.en[k]!==undefined?I18N.en[k]:k));}
+
+function fmt(ms){if(ms<=0)return"now";let s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60);s=s%60;return h>0?h+":"+String(m).padStart(2,'0')+":"+String(s).padStart(2,'0'):m+":"+String(s).padStart(2,'0');}
+function derive(p){
+  if (p.cancelled) return 'cancelled';
+  if (!p.confirmed) return 'ask';
+  if ((p.attempts||0) > 0) return 'backoff';
+  return 'armed';
+}
+const LABEL = () => ({armed:t('st_armed'), ask:t('st_ask'), backoff:t('st_backoff')});
+const C = {armed:'var(--green)', ask:'var(--amber)', backoff:'var(--blue)'};
+function render(){
+  const g = document.getElementById('grid'); g.innerHTML='';
+  const items = STATE.pending.filter(p=>!p.cancelled);
+  items.forEach(p=>{
+    const state = derive(p);
+    const left = Math.max(0, p.fireAt*1000 - Date.now());
+    const total = Math.max(1, (p.fireAt - (p.armedAt||p.fireAt)) * 1000);
+    const frac = Math.min(1, Math.max(0, 1 - left/total));
+    const col = C[state], R=33, CIRC=2*Math.PI*R;
+    const id = p.sessionId, short = id.slice(0,8);
+    const actions = state==='ask'
+      ? `<button class="btn go sm" onclick="event.stopPropagation();armNow('${id}')">${t('armNow')}</button><button class="btn danger sm" onclick="event.stopPropagation();cancelOne('${id}')">${t('cancel')}</button>`
+      : `<button class="btn danger sm" onclick="event.stopPropagation();cancelOne('${id}')">${t('cancel')}</button>`;
+    const resetTxt = state==='backoff' ? t('retrying') : `${t('resetsAt')} ${p.resetStr}`;
+    const extra = state==='backoff' ? ` · ${t('attempt')} ${p.attempts}` : '';
+    const card = document.createElement('div'); card.className='card pend';
+    card.onclick = ()=>openConvo(id, p.cwd||'', state);
+    card.innerHTML = `<span class="view-hint">${t('viewConvo')}</span>
+      <div class="ring"><svg width="78" height="78"><circle cx="39" cy="39" r="${R}" stroke="rgba(125,135,155,.18)" stroke-width="6" fill="none"/>
+        <circle cx="39" cy="39" r="${R}" stroke="${col}" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC*(1-frac)}" style="transition:stroke-dashoffset .5s linear"/></svg>
+        <div class="time">${fmt(left)}</div></div>
+      <div class="info"><div class="top"><span class="sid">${short}</span><span class="pill ${state}" data-tip="state${state.charAt(0).toUpperCase()+state.slice(1)}">${LABEL()[state]}</span></div>
+        <div class="cwd">${p.cwd||''}</div><div class="meta">${resetTxt}${extra}</div></div>
+      <div class="actions">${actions}</div>`;
+    g.appendChild(card);
+  });
+  document.getElementById('pcount').textContent = items.length;
+  bindTips();
+}
+function updNext(){
+  const up = STATE.pending.filter(p=>!p.cancelled && p.confirmed && p.fireAt*1000>Date.now()).sort((a,b)=>a.fireAt-b.fireAt)[0];
+  document.getElementById('st-next').textContent = up ? up.resetStr.replace(/ \(.*\)/,'') : '—';
+  document.getElementById('st-nextin').textContent = up ? t('inWord')+' '+fmt(up.fireAt*1000-Date.now()) : t('noPending');
+}
+function applyState(s){
+  STATE = s;
+  const sb = document.querySelector('.statbar').children;
+  sb[2].querySelector('.v').textContent = s.stats.limitHits7d ?? 0;
+  sb[3].querySelector('.v').textContent = s.stats.autoResumes ?? 0;
+  sb[4].querySelector('.v').textContent = s.stats.sessions7d ?? 0;
+  if (s.account) { document.querySelector('.acct .ae').textContent = s.account.email; document.querySelector('.acct .ao').textContent = s.account.org; }
+  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on', b.dataset.m===s.mode));
+  const fh = document.getElementById('fh'); fh.classList.toggle('on', !!s.forceHeadless);
+  fh.querySelector('span:last-child').textContent = s.forceHeadless ? t('on_l') : t('off_l');
+  document.querySelector('.msgbox input').value = s.defaultMessage || '';
+  render(); updNext();
+}
+async function loadState(){ try { const r = await api('/api/state'); if (r.ok) applyState(await r.json()); } catch(e){} }
+
+function cancelOne(id){ api('/api/pending/'+id+'/cancel',{method:'POST'}).then(loadState); }
+function armNow(id){ api('/api/pending/'+id+'/arm',{method:'POST'}).then(loadState); }
+
+let convoES = null;
+function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function msgBubble(m){
+  if (m.kind === 'tool') return `<div class="msg asst"><div class="tool"><span>⚙</span><span class="tname">${m.tool||''}</span><span>${escapeHtml(m.text)}</span></div></div>`;
+  const cls = m.role==='user' ? 'user' : 'asst';
+  const label = m.role==='user' ? t('you') : 'Claude';
+  const html = escapeHtml(m.text).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\n/g,'<br>');
+  return `<div class="msg ${cls}"><span class="role">${label}</span><div class="bubble">${html}</div></div>`;
+}
+async function openConvo(id, cwd, state){
+  current = { id, cwd, ref: STATE.pending.find(p=>p.sessionId===id) || null };
+  document.getElementById('d-sid').textContent = id.slice(0,8);
+  document.getElementById('d-cwd').textContent = cwd;
+  const mi = document.getElementById('d-msg'); mi.value = (current.ref && current.ref.message) || ''; mi.placeholder = t('usingGlobal');
+  document.getElementById('dmsg').classList.toggle('overridden', !!(current.ref && current.ref.message));
+  document.getElementById('resumeNow').style.display = (state==='armed'||state==='ask') ? 'inline-flex' : 'none';
+  const c = document.getElementById('convo'); c.innerHTML='';
+  document.getElementById('scrim').classList.add('open'); document.getElementById('modal').classList.add('open');
+  if (convoES) { convoES.close(); convoES = null; }
+  let offset = 0;
+  try {
+    const r = await api('/api/session/'+id+'/messages');
+    if (r.ok) { const d = await r.json(); offset = d.offset||0; c.innerHTML = d.messages.map(msgBubble).join(''); c.scrollTop = c.scrollHeight; }
+  } catch(e){}
+  document.getElementById('d-live').style.display = 'flex';
+  convoES = new EventSource(sseUrl('/api/session/'+id+'/stream?after='+offset));
+  convoES.onmessage = ev => { try { c.insertAdjacentHTML('beforeend', msgBubble(JSON.parse(ev.data))); c.scrollTop = c.scrollHeight; } catch(e){} };
+  bindTips();
+}
+function closeConvo(){
+  if (convoES){ convoES.close(); convoES=null; }
+  document.getElementById('scrim').classList.remove('open');document.getElementById('modal').classList.remove('open');
+}
+function copyCmd(){const cmd=`cd ${current.cwd} && claude --resume ${current.id}`;navigator.clipboard&&navigator.clipboard.writeText(cmd);toast(t('toastCopied')+': '+cmd);}
+function saveSessionMsg(){
+  const v = document.getElementById('d-msg').value.trim();
+  api('/api/pending/'+current.id+'/message',{method:'POST',body:JSON.stringify({text:v})}).then(()=>{
+    document.getElementById('dmsg').classList.toggle('overridden', !!v);
+    toast(v ? t('toastSaved')+' '+current.id.slice(0,8) : t('toastCleared'));
+  });
+}
+let tt;function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('show'),2400);}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeConvo();closeSettings();}});
+
+// settings + token
+function lanUrl(){ return location.origin + '/?token=' + TOKEN; }
+function renderQR(){const q=document.getElementById('qr');q.innerHTML='';let seed=0;for(const c of lanUrl())seed=(seed*31+c.charCodeAt(0))>>>0;
+  for(let i=0;i<121;i++){seed=(seed*1103515245+12345)>>>0;const r=Math.floor(i/11),c=i%11;
+    const corner=((r<3||r>7)&&(c<3||c>7)),on=corner?((r<3&&c<3)||(r<3&&c>7)||(r>7&&c<3)? ((r===0||r===2||c===0||c===2||(r===1&&c===1))?1:0) : 0):((seed>>9)&1);
+    const el=document.createElement('i');if(!on)el.className='off';q.appendChild(el);}}
+function openSettings(){const tok=document.getElementById('set-token');tok.type='password';tok.value=TOKEN;
+  document.getElementById('revealbtn').textContent=t('reveal');document.getElementById('set-url').value=lanUrl();renderQR();
+  document.getElementById('sscrim').classList.add('open');document.getElementById('smodal').classList.add('open');bindTips();}
+function closeSettings(){document.getElementById('sscrim').classList.remove('open');document.getElementById('smodal').classList.remove('open');}
+function toggleReveal(){const i=document.getElementById('set-token'),b=document.getElementById('revealbtn');
+  if(i.type==='password'){i.type='text';b.textContent=t('hide');}else{i.type='password';b.textContent=t('reveal');}}
+function rotate(){
+  api('/api/token/rotate',{method:'POST'}).then(r=>r.json()).then(d=>{
+    localStorage.setItem('cc-token', d.token);
+    location.search = '?token=' + d.token;
+  });
+}
+function copyUrl(){navigator.clipboard&&navigator.clipboard.writeText(lanUrl());toast(t('toastCopied'));}
+document.getElementById('setbtn').onclick=openSettings;
+
+// tooltips
+const tip=document.getElementById('tip');
+function moveTip(e){const x=Math.min(e.clientX,window.innerWidth-320);tip.style.left=x+'px';tip.style.top=(e.clientY+18)+'px';}
+function bindTips(){document.querySelectorAll('[data-tip]').forEach(el=>{
+  el.onmouseenter=e=>{tip.textContent=t('tip_'+el.dataset.tip);tip.classList.add('show');moveTip(e);};
+  el.onmousemove=moveTip;el.onmouseleave=()=>tip.classList.remove('show');});}
+
+// i18n apply
+function applyLang(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));
+  document.getElementById('langlabel').textContent=lang==='vi'?'VI':'EN';
+  document.documentElement.lang=lang;
+  render();updNext();bindTips();
+}
+document.getElementById('langbtn').onclick=()=>{lang=lang==='vi'?'en':'vi';localStorage.setItem('cc-lang',lang);applyLang();};
+
+// theme
+const SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>';
+function setTheme(th){document.documentElement.setAttribute('data-theme',th);document.getElementById('themebtn').innerHTML=th==='dark'?MOON:SUN;localStorage.setItem('cc-theme',th);}
+document.getElementById('themebtn').onclick=()=>setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
+setTheme(localStorage.getItem('cc-theme')||'dark');
+
+document.getElementById('seg').addEventListener('click', e=>{
+  if (e.target.dataset.m) api('/api/mode',{method:'POST',body:JSON.stringify({value:e.target.dataset.m})}).then(loadState);
+});
+document.getElementById('fh').addEventListener('click', ()=>{
+  api('/api/force-headless',{method:'POST',body:JSON.stringify({value:!STATE.forceHeadless})}).then(loadState);
+});
+document.querySelector('.msgbox .btn').addEventListener('click', ()=>{
+  const text = document.querySelector('.msgbox input').value;
+  api('/api/message',{method:'POST',body:JSON.stringify({text})}).then(()=>toast(t('save')));
+});
+
+applyLang();
+loadState();
+const es = new EventSource(sseUrl('/events'));
+es.onmessage = ev => { try { applyState(JSON.parse(ev.data)); } catch(e){} };
+setInterval(()=>{ render(); updNext(); }, 1000);
+</script>
+</body>
+</html>
