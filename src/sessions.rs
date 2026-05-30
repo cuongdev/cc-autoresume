@@ -19,6 +19,7 @@ pub struct SessionInfo {
     pub has_preset: bool,
     #[serde(skip_serializing_if = "Option::is_none")] pub preset_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")] pub preset_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")] pub title: Option<String>,
 }
 
 pub fn presets_load(path: &Path) -> HashMap<String, SessionPreset> {
@@ -80,6 +81,7 @@ pub fn discover(projects_dir: &Path, presets_path: &Path, pending_dir: &Path,
         let sid = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
         if sid.is_empty() { continue; }
         let cwd = cwd_fast(&path);
+        let title = title_fast(&path);
         let live = (now - mtime).abs() < live_window_secs;
         let pending = crate::pending::read(pending_dir, &sid).is_some();
         let preset = presets.get(&sid).cloned();
@@ -88,6 +90,7 @@ pub fn discover(projects_dir: &Path, presets_path: &Path, pending_dir: &Path,
             has_preset: preset.is_some(),
             preset_message: preset.as_ref().and_then(|p| p.message.clone()),
             preset_mode: preset.as_ref().and_then(|p| p.mode.clone()),
+            title,
         });
     }
     out
@@ -101,6 +104,29 @@ fn cwd_fast(path: &Path) -> Option<String> {
         if let Ok(o) = serde_json::from_str::<serde_json::Value>(&line) {
             if let Some(c) = o.get("cwd").and_then(|c| c.as_str()) { return Some(c.to_string()); }
         }
+    }
+    None
+}
+
+/// First user-prompt snippet (≤60 chars, whitespace-collapsed) for a friendly label.
+fn title_fast(path: &Path) -> Option<String> {
+    use std::io::{BufRead, BufReader};
+    let f = std::fs::File::open(path).ok()?;
+    for line in BufReader::new(f).lines().take(20).map_while(Result::ok) {
+        let Ok(o) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+        if o.get("type").and_then(|t| t.as_str()) != Some("user") { continue; }
+        let content = o.get("message").and_then(|m| m.get("content"));
+        let text = match content {
+            Some(serde_json::Value::String(s)) => s.clone(),
+            Some(serde_json::Value::Array(a)) =>
+                a.iter().find_map(|b| b.get("text").and_then(|t| t.as_str())).unwrap_or("").to_string(),
+            _ => continue,
+        };
+        let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let collapsed = collapsed.trim();
+        if collapsed.is_empty() { continue; }
+        let snippet: String = collapsed.chars().take(60).collect();
+        return Some(if collapsed.chars().count() > 60 { format!("{snippet}…") } else { snippet });
     }
     None
 }
@@ -146,6 +172,7 @@ mod tests {
         assert!(got[0].has_preset);
         assert_eq!(got[0].preset_message.as_deref(), Some("go"));
         assert!(!got[0].pending);
+        assert_eq!(got[0].title.as_deref(), Some("hi"));
         let got2 = discover(proj.path(), &pres, pend.path(), m + 300, i64::MAX, 60, 120);
         assert!(!got2[0].live);                        // age 300s > 120
     }
