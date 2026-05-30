@@ -197,6 +197,44 @@ pub async fn rotate_token(State(s): State<AppState>) -> impl IntoResponse {
     Json(TokenResp { token: cfg.token })
 }
 
+pub async fn selftest(State(s): State<AppState>) -> impl IntoResponse {
+    let runner = s.runner.clone();
+    let (bin, code, version, path) = tokio::task::spawn_blocking(move || {
+        let bin = resume::resolve_claude_bin();
+        let out = runner.run(&[bin.clone(), "--version".into()], None);
+        let mut v = out.stdout.trim().to_string();
+        if v.is_empty() { v = out.stderr.trim().to_string(); }
+        (bin, out.code, v, std::env::var("PATH").unwrap_or_default())
+    }).await.unwrap_or_else(|_| ("claude".into(), -1, "spawn failed".into(), String::new()));
+    Json(serde_json::json!({ "claudeBin": bin, "ok": code == 0, "code": code, "version": version, "daemonPath": path }))
+}
+
+#[derive(serde::Deserialize)]
+pub struct TestResumeBody { #[serde(default)] pub message: Option<String> }
+
+pub async fn test_resume(State(s): State<AppState>, axum::extract::Path(id): axum::extract::Path<String>,
+                         Json(b): Json<TestResumeBody>) -> impl IntoResponse {
+    let Some(tp) = find_transcript(&s, &id) else {
+        return (StatusCode::NOT_FOUND, Json(serde_json::json!({"outcome":"not-found"}))).into_response();
+    };
+    let mut cfg = Config::load(&s.config_path());
+    cfg.force_headless = true; // a test must actually run claude even if a TUI holds the session
+    let msg = b.message.filter(|m| !m.is_empty()).unwrap_or_else(|| cfg.message_for(None));
+    let cwd = crate::detect::resolve_cwd(&tp);
+    let runner = s.runner.clone();
+    let id2 = id.clone();
+    let tp2 = tp.to_string_lossy().into_owned();
+    let outcome = tokio::task::spawn_blocking(move || {
+        let bin = resume::resolve_claude_bin();
+        let rec = pending::Pending {
+            session_id: id2, cwd, transcript_path: tp2, reset_str: String::new(),
+            fire_at: 0, message: msg, armed_at: 0, cancelled: false, confirmed: true, attempts: 0,
+        };
+        resume::run_resume(&rec, &cfg, runner.as_ref(), &scheduler::which_path, &bin)
+    }).await.unwrap_or("error");
+    Json(serde_json::json!({ "outcome": outcome })).into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::server::{build_router, test_state};
@@ -400,6 +438,58 @@ mod tests {
         let rec = pending::read(&base.path().join("pending"), "deadbeef").unwrap();
         assert_eq!(rec.message, "live update");
         assert!(rec.confirmed);
+    }
+
+    #[tokio::test]
+    async fn selftest_runs_version() {
+        use crate::{CmdOut, Runner};
+        use std::sync::{Arc, Mutex};
+        struct R(Mutex<Vec<Vec<String>>>);
+        impl Runner for R { fn run(&self, a:&[String], _c:Option<&str>)->CmdOut { self.0.lock().unwrap().push(a.to_vec()); CmdOut{ stdout:"claude 9.9.9 (test)".into(), stderr:String::new(), code:0 } } }
+        let base = tempfile::tempdir().unwrap(); let home = tempfile::tempdir().unwrap();
+        let cfg = crate::config::Config { token: "tk".into(), ..crate::config::Config::default() };
+        cfg.save(&base.path().join("config.json")).unwrap();
+        let rec = Arc::new(R(Mutex::new(vec![])));
+        let state = crate::server::AppState { base: base.path().into(), home: home.path().into(),
+            projects_dir: home.path().join(".claude/projects"), runner: rec.clone(),
+            status: Arc::new(tokio::sync::RwLock::new(crate::server::WatcherStatus::default())) };
+        let app = build_router(state);
+        let res = app.oneshot(Request::builder().uri("/api/selftest").header("authorization","Bearer tk").body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let v: serde_json::Value = serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(v["ok"], true);
+        assert!(v["version"].as_str().unwrap().contains("9.9.9"));
+        assert!(rec.0.lock().unwrap()[0].contains(&"--version".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_resume_runs_and_404() {
+        use crate::{CmdOut, Runner};
+        use std::sync::{Arc, Mutex};
+        struct R(Mutex<Vec<Vec<String>>>);
+        impl Runner for R { fn run(&self, a:&[String], _c:Option<&str>)->CmdOut { self.0.lock().unwrap().push(a.to_vec()); CmdOut{ stdout:"done".into(), stderr:String::new(), code:0 } } }
+        let base = tempfile::tempdir().unwrap(); let home = tempfile::tempdir().unwrap();
+        let cfg = crate::config::Config { token: "tk".into(), ..crate::config::Config::default() };
+        cfg.save(&base.path().join("config.json")).unwrap();
+        // a transcript so find_transcript resolves
+        std::fs::create_dir_all(home.path().join(".claude/projects/p")).unwrap();
+        std::fs::write(home.path().join(".claude/projects/p/sess.jsonl"), "{\"type\":\"user\",\"cwd\":\"/w\",\"message\":{\"content\":\"x\"}}\n").unwrap();
+        let rec = Arc::new(R(Mutex::new(vec![])));
+        let state = crate::server::AppState { base: base.path().into(), home: home.path().into(),
+            projects_dir: home.path().join(".claude/projects"), runner: rec.clone(),
+            status: Arc::new(tokio::sync::RwLock::new(crate::server::WatcherStatus::default())) };
+        let app = build_router(state);
+        // known session -> runs claude -> ok
+        let res = app.clone().oneshot(Request::builder().method("POST").uri("/api/session/sess/test-resume")
+            .header("authorization","Bearer tk").header("content-type","application/json").body(Body::from(r#"{"message":"hi"}"#)).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let v: serde_json::Value = serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(v["outcome"], "ok");
+        assert!(rec.0.lock().unwrap().iter().any(|c| c.contains(&"--resume".to_string())));
+        // unknown -> 404
+        let res = app.oneshot(Request::builder().method("POST").uri("/api/session/nope/test-resume")
+            .header("authorization","Bearer tk").header("content-type","application/json").body(Body::from("{}")).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

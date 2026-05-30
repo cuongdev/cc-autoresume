@@ -50,6 +50,8 @@ pub fn build_router(state: AppState) -> axum::Router {
         .route("/api/session/:id/stream", get(sse::session_stream))
         .route("/api/token/rotate", post(api::rotate_token))
         .route("/api/qr", get(api::qr_svg))
+        .route("/api/selftest", get(api::selftest))
+        .route("/api/session/:id/test-resume", post(api::test_resume))
         .route("/events", get(sse::events))
         .layer(middleware::from_fn_with_state(state.clone(), auth::require_token));
     axum::Router::new()
