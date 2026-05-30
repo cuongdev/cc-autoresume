@@ -12,12 +12,14 @@ launchctl unload "$PLIST" 2>/dev/null || true
 # 2. Build release binary
 cd "$ROOT" && cargo build --release
 mkdir -p "$HOME/.local/bin" "$HOME/.claude/auto-resume"
+rm -f "$BIN"   # drop any prior symlink so cp writes a fresh file (not through it)
 cp "$ROOT/target/release/cc-autoresume" "$BIN"
 
 # 3. Install + load LaunchAgent
 sed -e "s#__BIN__#$BIN#g" -e "s#__LOG__#$LOG#g" "$ROOT/launchd/$LABEL.plist" > "$PLIST"
 launchctl load "$PLIST"
 
-echo "Installed. cc-autoresume (Rust) is on ~/.local/bin and the watcher is running."
-echo "Dashboard arrives in Phase 2-3. Optional sleep-wake: add to sudoers via 'sudo visudo':"
+echo "Installed. cc-autoresume (Rust) is on ~/.local/bin and the watcher + dashboard are running."
+echo "Open the dashboard:  cc-autoresume url   (LAN + token; QR for your phone is in Settings)"
+echo "Optional sleep-wake (wake the Mac at reset time): add to sudoers via 'sudo visudo':"
 echo "  $(whoami) ALL=(root) NOPASSWD: /usr/bin/pmset schedule wake *"
