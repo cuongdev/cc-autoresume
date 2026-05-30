@@ -128,7 +128,7 @@ mod tests {
     fn setup() -> (tempfile::TempDir, tempfile::TempDir, String) {
         let base = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
-        let mut cfg = Config::default(); cfg.token = "secrettoken".into();
+        let cfg = Config { token: "secrettoken".into(), ..Config::default() };
         cfg.save(&base.path().join("config.json")).unwrap();
         (base, home, "secrettoken".to_string())
     }
@@ -241,7 +241,7 @@ mod tests {
         impl Runner for Rec { fn run(&self, a: &[String], _c: Option<&str>) -> CmdOut { self.0.lock().unwrap().push(a.to_vec()); CmdOut { code: 0, ..Default::default() } } }
         let base = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
-        let mut cfg = crate::config::Config::default(); cfg.token = "tk".into();
+        let cfg = crate::config::Config { token: "tk".into(), ..crate::config::Config::default() };
         cfg.save(&base.path().join("config.json")).unwrap();
         seed(base.path());
         let rec = Arc::new(Rec(Mutex::new(vec![])));
