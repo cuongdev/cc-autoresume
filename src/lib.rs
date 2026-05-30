@@ -10,6 +10,7 @@ pub mod resume;
 pub mod arm;
 pub mod watch;
 pub mod cli;
+pub mod server;
 
 pub trait Runner {
     fn run(&self, args: &[String], cwd: Option<&str>) -> CmdOut;
