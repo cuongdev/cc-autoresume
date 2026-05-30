@@ -1,7 +1,7 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use crate::{account, config::Config, pending, stats, server::AppState};
 use chrono::Utc;
-use crate::{resume, scheduler};
+use crate::{resume, scheduler, transcript};
 
 pub async fn state_json(s: &AppState) -> serde_json::Value {
     let now = chrono::Utc::now().timestamp();
@@ -104,6 +104,39 @@ pub async fn open_terminal(State(s): State<AppState>, axum::extract::Path(id): a
 }
 
 fn shell_quote(s: &str) -> String { s.replace('\\', "\\\\").replace('"', "\\\"") }
+
+/// Resolve a session id to its transcript path: pending record → recent → search projects dir.
+pub fn find_transcript(s: &AppState, id: &str) -> Option<std::path::PathBuf> {
+    if let Some(r) = pending::read(&s.pending_dir(), id) {
+        let p = std::path::PathBuf::from(&r.transcript_path);
+        if p.exists() { return Some(p); }
+    }
+    if let Some(r) = stats::Stats::load(&s.stats_path()).recent.into_iter().find(|r| r.session_id == id) {
+        let p = std::path::PathBuf::from(&r.transcript_path);
+        if p.exists() { return Some(p); }
+    }
+    fn walk(dir: &std::path::Path, name: &str) -> Option<std::path::PathBuf> {
+        let rd = std::fs::read_dir(dir).ok()?;
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() { if let Some(f) = walk(&p, name) { return Some(f); } }
+            else if p.file_name().and_then(|n| n.to_str()) == Some(name) { return Some(p); }
+        }
+        None
+    }
+    walk(&s.projects_dir, &format!("{id}.jsonl"))
+}
+
+pub async fn session_messages(State(s): State<AppState>, axum::extract::Path(id): axum::extract::Path<String>) -> impl IntoResponse {
+    match find_transcript(&s, &id) {
+        Some(path) => {
+            let msgs = transcript::read_messages(&path);
+            let offset = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            Json(serde_json::json!({ "messages": msgs, "offset": offset })).into_response()
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
 
 #[derive(serde::Serialize)]
 pub struct TokenResp { pub token: String }
@@ -231,6 +264,34 @@ mod tests {
         let res = app.oneshot(Request::builder().uri("/api/state")
             .header("authorization", format!("Bearer {t}")).body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn session_messages_reads_transcript() {
+        let (base, home, t) = setup();
+        std::fs::create_dir_all(home.path().join("proj")).unwrap();
+        let tpath = home.path().join("proj/sess.jsonl");
+        std::fs::write(&tpath, "{\"type\":\"user\",\"message\":{\"content\":\"hello\"}}\n").unwrap();
+        let rec = Pending { session_id: "sess".into(), cwd: None, transcript_path: tpath.to_string_lossy().into(),
+            reset_str: "4pm".into(), fire_at: 1, message: "m".into(), armed_at: 0, cancelled: false, confirmed: true, attempts: 0 };
+        pending::write(&base.path().join("pending"), &rec).unwrap();
+        let app = build_router(test_state(base.path().into(), home.path().into()));
+        let res = app.oneshot(Request::builder().uri("/api/session/sess/messages")
+            .header("authorization", format!("Bearer {t}")).body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body = res.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["messages"][0]["text"], "hello");
+        assert!(v["offset"].as_u64().unwrap() > 0);
+    }
+
+    #[tokio::test]
+    async fn session_messages_unknown_404() {
+        let (base, home, t) = setup();
+        let app = build_router(test_state(base.path().into(), home.path().into()));
+        let res = app.oneshot(Request::builder().uri("/api/session/nope/messages")
+            .header("authorization", format!("Bearer {t}")).body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
