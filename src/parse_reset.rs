@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Datelike, TimeZone, Utc};
 use chrono_tz::Tz;
 use regex::Regex;
 use std::str::FromStr;
@@ -31,6 +31,7 @@ pub fn parse_reset(reset: &str, now_utc: DateTime<Utc>, default_tz: Tz) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Timelike;
     use chrono_tz::Asia::Saigon as SG;
 
     fn now(h: u32, m: u32) -> DateTime<Utc> {
