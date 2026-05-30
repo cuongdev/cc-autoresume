@@ -1,4 +1,5 @@
 pub mod account;
+pub mod stats;
 pub mod parse_reset;
 pub mod detect;
 pub mod config;
