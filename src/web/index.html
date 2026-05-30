@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>cc-autoresume — dashboard (mock)</title>
+<title>cc-autoresume — dashboard</title>
 <style>
   :root{--accent:#b8f23a;--accent-dim:#7c9e2a;
     --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
@@ -105,7 +105,6 @@
 
   .foot{margin-top:30px;text-align:center;font-size:12px;color:var(--faint);line-height:1.7}
   .foot code{font-family:var(--mono);color:var(--muted);background:var(--surface);padding:2px 6px;border-radius:5px}
-  .mockbadge{display:inline-block;margin-bottom:14px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);background:color-mix(in srgb,var(--amber) 12%,transparent);border:1px solid color-mix(in srgb,var(--amber) 26%,transparent);padding:5px 11px;border-radius:999px}
 
   .scrim{position:fixed;inset:0;background:rgba(4,6,10,.55);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:.22s;z-index:40}
   .scrim.open{opacity:1;pointer-events:auto}
@@ -184,13 +183,8 @@
   <div class="sec-h"><h2 data-i18n="pending"></h2><span class="count" id="pcount">3</span><span class="help" data-tip="pending">?</span></div>
   <div class="grid" id="grid"></div>
 
-  <div class="sec-h recent"><h2 data-i18n="recent"></h2><span class="count">1</span></div>
-  <div class="grid">
-    <div class="card recent-row" onclick="openConvo('1f90ac22','~/projects/idlogiq.com/onyx','done')">
-      <span class="pill done" data-tip="stateDone" data-i18n="st_done"></span><span class="sid">1f90ac22</span>
-      <span class="cwd">~/projects/idlogiq.com/onyx</span><span class="meta" data-i18n="resumed_ago"></span>
-      <span class="view-hint">→</span></div>
-  </div>
+  <div class="sec-h recent"><h2 data-i18n="recent"></h2><span class="count" id="recentCount">0</span></div>
+  <div class="grid" id="recentGrid"></div>
 
   <div class="foot">
     <span data-i18n="foot"></span> <code>http://&lt;lan-ip&gt;:7317/?token=…</code></div>
@@ -378,7 +372,21 @@ function applyState(s){
   const fh = document.getElementById('fh'); fh.classList.toggle('on', !!s.forceHeadless);
   fh.querySelector('span:last-child').textContent = s.forceHeadless ? t('on_l') : t('off_l');
   document.querySelector('.msgbox input').value = s.defaultMessage || '';
-  render(); updNext();
+  render(); updNext(); renderRecent();
+}
+function renderRecent(){
+  const g = document.getElementById('recentGrid'); if(!g) return;
+  const rec = STATE.recent || [];
+  document.getElementById('recentCount').textContent = rec.length;
+  g.innerHTML = rec.map(r=>{
+    const short = (r.sessionId||'').slice(0,8);
+    const outcome = r.outcome==='ok' ? t('st_done') : (r.outcome||'');
+    return `<div class="card recent-row" onclick="openConvo('${r.sessionId}','${(r.cwd||'').replace(/'/g,"\\'")}','done')">
+      <span class="pill done">${t('st_done')}</span><span class="sid">${short}</span>
+      <span class="cwd">${r.cwd||''}</span><span class="meta">${outcome}</span>
+      <span class="view-hint" style="opacity:.6">${t('viewConvo')}</span></div>`;
+  }).join('');
+  bindTips();
 }
 async function loadState(){ try { const r = await api('/api/state'); if (r.ok) applyState(await r.json()); } catch(e){} }
 
@@ -462,7 +470,7 @@ function applyLang(){
   document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));
   document.getElementById('langlabel').textContent=lang==='vi'?'VI':'EN';
   document.documentElement.lang=lang;
-  render();updNext();bindTips();
+  render();updNext();renderRecent();bindTips();
 }
 document.getElementById('langbtn').onclick=()=>{lang=lang==='vi'?'en':'vi';localStorage.setItem('cc-lang',lang);applyLang();};
 
