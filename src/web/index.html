@@ -434,7 +434,7 @@ function renderActive(){
     const dot = s.live ? '<span class="dot" style="width:8px;height:8px"></span>' : '';
     const badges = (s.hasPreset ? `<span class="pill armed">preset</span>` : '') + (s.pending ? `<span class="pill ask">pending</span>` : '');
     return `<div class="card recent-row" onclick="openConvo('${s.sessionId}','${(s.cwd||'').replace(/'/g,"\\'")}','active')">
-      ${dot}<span class="sid">${proj(s.cwd)}</span><span class="cwd"><span style="opacity:.55">${short}</span> · ${s.cwd||''}</span>
+      ${dot}<span class="sid">${short}</span><span class="cwd" title="${(s.cwd||'').replace(/"/g,'&quot;')}">${s.title ? s.title.replace(/</g,'&lt;') : (s.cwd||'')}</span>
       ${badges}<span class="meta">${t('lastActive')} ${relTime(s.lastActivityEpoch)}</span>
       <span class="view-hint" style="opacity:.6">→</span></div>`;
   }).join('');
@@ -491,7 +491,11 @@ async function openConvo(id, cwd, state){
   } catch(e){}
   document.getElementById('d-live').style.display = 'flex';
   convoES = new EventSource(sseUrl('/api/session/'+id+'/stream?after='+offset));
-  convoES.onmessage = ev => { try { c.insertAdjacentHTML('beforeend', msgBubble(JSON.parse(ev.data))); c.scrollTop = c.scrollHeight; } catch(e){} };
+  convoES.onmessage = ev => { try {
+    const near = c.scrollHeight - c.scrollTop - c.clientHeight < 80;   // only auto-scroll if user is at the bottom
+    c.insertAdjacentHTML('beforeend', msgBubble(JSON.parse(ev.data)));
+    if (near) c.scrollTop = c.scrollHeight;
+  } catch(e){} };
   bindTips();
 }
 function closeConvo(){
