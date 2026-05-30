@@ -187,7 +187,7 @@
   <div class="grid" id="recentGrid"></div>
 
   <div class="foot">
-    <span data-i18n="foot"></span> <code>http://&lt;lan-ip&gt;:7317/?token=…</code></div>
+    <span data-i18n="foot"></span> <code id="foot-url">…</code></div>
 </div>
 
 <div class="scrim" id="scrim" onclick="closeConvo()"></div>
@@ -493,6 +493,7 @@ document.querySelector('.msgbox .btn').addEventListener('click', ()=>{
 });
 
 applyLang();
+document.getElementById('foot-url').textContent = location.origin;
 loadState();
 const es = new EventSource(sseUrl('/events'));
 es.onmessage = ev => { try { applyState(JSON.parse(ev.data)); } catch(e){} };
