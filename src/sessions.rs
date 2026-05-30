@@ -74,7 +74,7 @@ pub fn discover(projects_dir: &Path, presets_path: &Path, pending_dir: &Path,
         if (now - mtime).abs() > window_secs { continue; }
         entries.push((path, mtime));
     }
-    entries.sort_by(|a, b| b.1.cmp(&a.1));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.1));
     entries.truncate(cap);
     let mut out = vec![];
     for (path, mtime) in entries {
