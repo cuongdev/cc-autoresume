@@ -7,7 +7,11 @@ use std::path::Path;
 /// `schedule` is called with fire_at only when the record is confirmed (auto mode).
 pub fn arm(dir: &Path, cfg: &Config, ev: &LimitEvent, now: chrono::DateTime<Utc>,
            default_tz: Tz, runner: &dyn Runner, schedule: &mut dyn FnMut(i64)) -> Option<Pending> {
-    let mode = cfg.mode_for(ev.cwd.as_deref());
+    // session preset (highest precedence) at <base>/sessions.json, base = parent of pending dir
+    let preset = dir.parent()
+        .map(|base| crate::sessions::preset_for(&base.join("sessions.json"), &ev.session_id))
+        .unwrap_or_default();
+    let mode = preset.mode.clone().unwrap_or_else(|| cfg.mode_for(ev.cwd.as_deref()));
     if mode == "off" {
         notify::notify("cc-autoresume", &format!("Hit limit; auto-resume OFF here. Resets {}", ev.reset_str), runner);
         return None;
@@ -22,7 +26,7 @@ pub fn arm(dir: &Path, cfg: &Config, ev: &LimitEvent, now: chrono::DateTime<Utc>
         transcript_path: ev.transcript_path.clone(),
         reset_str: ev.reset_str.clone(),
         fire_at,
-        message: cfg.message_for(ev.cwd.as_deref()),
+        message: preset.message.clone().unwrap_or_else(|| cfg.message_for(ev.cwd.as_deref())),
         armed_at: now.timestamp(),
         cancelled: false,
         confirmed,
@@ -96,5 +100,35 @@ mod tests {
         let mut e = ev(); e.reset_str = "soon-ish".into();
         let r = arm(d.path(), &Config::default(), &e, now(), SG, &Null, &mut |_| {}).unwrap();
         assert_eq!(r.fire_at, now().timestamp() + 300);
+    }
+    #[test]
+    fn preset_message_and_mode_take_precedence() {
+        let base = tempfile::tempdir().unwrap();
+        let pend = base.path().join("pending");
+        std::fs::create_dir_all(&pend).unwrap();
+        crate::sessions::upsert_preset(&base.path().join("sessions.json"), "s1abcdef",
+            Some("preset msg".into()), None);
+        let rec = arm(&pend, &Config::default(), &ev(), now(), SG, &Null, &mut |_| {}).unwrap();
+        assert_eq!(rec.message, "preset msg");
+        assert!(rec.confirmed);
+    }
+    #[test]
+    fn preset_mode_off_blocks() {
+        let base = tempfile::tempdir().unwrap();
+        let pend = base.path().join("pending");
+        std::fs::create_dir_all(&pend).unwrap();
+        crate::sessions::upsert_preset(&base.path().join("sessions.json"), "s1abcdef",
+            None, Some("off".into()));
+        assert!(arm(&pend, &Config::default(), &ev(), now(), SG, &Null, &mut |_| {}).is_none());
+    }
+    #[test]
+    fn preset_mode_ask_unconfirms() {
+        let base = tempfile::tempdir().unwrap();
+        let pend = base.path().join("pending");
+        std::fs::create_dir_all(&pend).unwrap();
+        crate::sessions::upsert_preset(&base.path().join("sessions.json"), "s1abcdef",
+            None, Some("ask".into()));
+        let rec = arm(&pend, &Config::default(), &ev(), now(), SG, &Null, &mut |_| {}).unwrap();
+        assert!(!rec.confirmed);
     }
 }
