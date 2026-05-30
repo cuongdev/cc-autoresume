@@ -97,15 +97,21 @@ pub fn serve(home: PathBuf) {
             let config_path = loop_base.join("config.json");
             let stats_path = loop_base.join("stats.json");
             let mut w = Watcher::new(loop_projects);
+            let claude_bin = resume::resolve_claude_bin();
+            eprintln!("[cc-autoresume] using claude at: {claude_bin}");
             let mut tick = tokio::time::interval(std::time::Duration::from_secs(20));
             loop {
                 tick.tick().await;
                 let cfg = Config::load(&config_path);
                 let now = Utc::now();
                 let armed = w.scan_once(&pending_dir, &cfg, now, tz, &RealRunner);
-                for rec in &armed { crate::stats::Stats::record_limit_hit(&stats_path, rec.armed_at); }
+                for rec in &armed {
+                    crate::stats::Stats::record_limit_hit(&stats_path, rec.armed_at);
+                    eprintln!("[cc-autoresume] armed {} (resets {})", &rec.session_id[..8.min(rec.session_id.len())], rec.reset_str);
+                }
                 for r in pending::due(&pending_dir, now.timestamp()) {
-                    let outcome = resume::fire(&pending_dir, &r.session_id, &cfg, now.timestamp(), &RealRunner, &scheduler::which_path, "claude");
+                    let outcome = resume::fire(&pending_dir, &r.session_id, &cfg, now.timestamp(), &RealRunner, &scheduler::which_path, &claude_bin);
+                    eprintln!("[cc-autoresume] resume {} -> {}", &r.session_id[..8.min(r.session_id.len())], outcome);
                     crate::stats::Stats::record_resume(&stats_path, crate::stats::RecentEntry {
                         session_id: r.session_id.clone(), cwd: r.cwd.clone(), transcript_path: r.transcript_path.clone(),
                         outcome: outcome.to_string(), at: now.timestamp() });

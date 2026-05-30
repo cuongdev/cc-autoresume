@@ -67,6 +67,28 @@ pub fn fire(dir: &Path, id: &str, cfg: &Config, now: i64, runner: &dyn Runner,
     }
 }
 
+/// Return the first path in `cands` that exists.
+pub fn first_existing(cands: &[std::path::PathBuf]) -> Option<std::path::PathBuf> {
+    cands.iter().find(|p| p.exists()).cloned()
+}
+
+/// Resolve the `claude` binary to an absolute path (LaunchAgents have a minimal PATH
+/// that excludes ~/.local/bin etc.). Falls back to bare "claude".
+pub fn resolve_claude_bin() -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let cands: Vec<std::path::PathBuf> = [
+        format!("{home}/.local/bin/claude"),
+        format!("{home}/.claude/local/claude"),
+        "/opt/homebrew/bin/claude".into(),
+        "/usr/local/bin/claude".into(),
+    ].iter().map(std::path::PathBuf::from).collect();
+    if let Some(p) = first_existing(&cands) {
+        return p.to_string_lossy().into_owned();
+    }
+    if let Some(p) = crate::scheduler::which_path("claude") { return p; }
+    "claude".into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,6 +115,15 @@ mod tests {
             cancelled: false, confirmed: true, attempts: 0 }
     }
 
+    #[test]
+    fn first_existing_picks_present() {
+        let d = tempfile::tempdir().unwrap();
+        let real = d.path().join("claude");
+        std::fs::write(&real, "x").unwrap();
+        let cands = vec![d.path().join("nope"), real.clone()];
+        assert_eq!(first_existing(&cands), Some(real));
+        assert_eq!(first_existing(&[d.path().join("none")]), None);
+    }
     #[test]
     fn build_cmd_shape() {
         assert_eq!(build_cmd("go", "s1", "claude"), vec!["claude","-p","go","--resume","s1"]);

@@ -18,7 +18,9 @@ impl Watcher {
             if let Ok(rd) = std::fs::read_dir(dir) {
                 for e in rd.flatten() {
                     let p = e.path();
-                    if p.is_dir() { walk(&p, out); }
+                    if p.is_dir() {
+                        if p.file_name().and_then(|n| n.to_str()) != Some("subagents") { walk(&p, out); }
+                    }
                     else if p.extension().and_then(|x| x.to_str()) == Some("jsonl") { out.push(p); }
                 }
             }
@@ -94,6 +96,21 @@ mod tests {
         let armed = w.scan_once(pend.path(), &Config::default(), now(), SG, &Null);
         assert_eq!(armed.len(), 1);
         assert_eq!(pending::read(pend.path(), "sess").unwrap().cwd.as_deref(), Some("/Users/dev/projects/demo"));
+    }
+    #[test]
+    fn ignores_subagent_limit_lines() {
+        let proj = tempfile::tempdir().unwrap();
+        let pend = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(proj.path().join("s/subagents")).unwrap();
+        let f = proj.path().join("s/subagents/agent-x.jsonl");
+        std::fs::write(&f, "{\"type\":\"user\",\"message\":{}}\n").unwrap();
+        let mut w = Watcher::new(proj.path().to_path_buf());
+        w.scan_once(pend.path(), &Config::default(), now(), SG, &Null);
+        use std::io::Write;
+        std::fs::OpenOptions::new().append(true).open(&f).unwrap()
+            .write_all(LIMIT.as_bytes()).unwrap();
+        let armed = w.scan_once(pend.path(), &Config::default(), now(), SG, &Null);
+        assert!(armed.is_empty());   // subagent limit ignored
     }
     #[test]
     fn truncation_defers() {

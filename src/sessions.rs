@@ -47,7 +47,9 @@ fn jsonl_files(dir: &Path) -> Vec<PathBuf> {
         if let Ok(rd) = std::fs::read_dir(dir) {
             for e in rd.flatten() {
                 let p = e.path();
-                if p.is_dir() { walk(&p, out); }
+                if p.is_dir() {
+                    if p.file_name().and_then(|n| n.to_str()) != Some("subagents") { walk(&p, out); }
+                }
                 else if p.extension().and_then(|x| x.to_str()) == Some("jsonl") { out.push(p); }
             }
         }
@@ -156,6 +158,18 @@ mod tests {
         std::fs::write(proj.path().join("p/old.jsonl"), "{}\n").unwrap();
         let got = discover(proj.path(), &pres, pend.path(), 1_000_000_000, -1, 60, 120);
         assert!(got.is_empty());
+    }
+    #[test]
+    fn discover_skips_subagent_transcripts() {
+        let proj = tempfile::tempdir().unwrap();
+        let pend = tempfile::tempdir().unwrap();
+        let pres = proj.path().join("sessions.json");
+        std::fs::create_dir_all(proj.path().join("sess/subagents")).unwrap();
+        std::fs::write(proj.path().join("sess/main.jsonl"), "{\"type\":\"user\",\"message\":{\"content\":\"x\"}}\n").unwrap();
+        std::fs::write(proj.path().join("sess/subagents/agent-abc.jsonl"), "{\"type\":\"user\",\"message\":{\"content\":\"y\"}}\n").unwrap();
+        let ids: Vec<_> = discover(proj.path(), &pres, pend.path(), mtime_of(&proj.path().join("sess/main.jsonl")) + 1, i64::MAX, 60, 120)
+            .into_iter().map(|s| s.session_id).collect();
+        assert_eq!(ids, vec!["main".to_string()]);   // subagent excluded
     }
     #[test]
     fn discover_caps_results() {
