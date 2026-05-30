@@ -201,12 +201,12 @@
   <div class="dmsg" id="dmsg"><span class="lbl"><span data-i18n="msgThis"></span><span class="ov" data-i18n="overrides"></span><span class="help" data-tip="resumeMessageSession">?</span></span>
     <div class="row"><input id="d-msg"><button class="btn" onclick="saveSessionMsg()" data-i18n="save"></button></div>
       <div class="row" style="margin-top:8px;align-items:center;gap:10px">
-        <span class="lbl" style="margin:0" data-i18n="sessionMode"></span>
+        <span class="lbl" style="margin:0" data-i18n="sessionMode"></span><span class="help" data-tip="sessionMode">?</span>
         <div class="seg" id="d-mode">
-          <button data-pm="" data-i18n="modeDefault"></button>
-          <button data-pm="auto" data-i18n="auto"></button>
-          <button data-pm="ask" data-i18n="ask"></button>
-          <button data-pm="off" data-i18n="off"></button>
+          <button data-pm="" data-tip="modeDefault" data-i18n="modeDefault"></button>
+          <button data-pm="auto" data-tip="modeAuto" data-i18n="auto"></button>
+          <button data-pm="ask" data-tip="modeAsk" data-i18n="ask"></button>
+          <button data-pm="off" data-tip="modeOff" data-i18n="off"></button>
         </div>
       </div></div>
   <div class="dfoot">
@@ -297,8 +297,10 @@ const I18N={
     configAt:"Config file",reveal:"Reveal",hide:"Hide",scanPhone:"Scan to open on your phone",copy:"Copy",rotated:"New token generated",
     tip_settings:"Dashboard access — URL, QR for your phone, and the access token.",
     tip_regen:"Generate a new token. Old links and open tabs stop working until reopened with the new URL.",
-    activeSessions:"Active sessions",live:"live",lastActive:"active",sessionMode:"Mode for this session",modeDefault:"(default)",presetSaved:"Preset saved",
+    activeSessions:"Active sessions",live:"live",lastActive:"active",sessionMode:"Mode for this session",modeDefault:"(use global)",presetSaved:"Preset saved",
     tip_activeSessions:"Claude Code sessions active in the last 24h — set their resume message/mode before they hit a limit.",
+    tip_sessionMode:"Override the mode for just this session. (use global) = follow the global mode above; Auto/Ask/Off = force that mode for this session only.",
+    tip_modeDefault:"Follow the global mode set above — no per-session override.",
     debug:"Debug",selftest:"Self-test claude",testResume:"Test resume",testResuming:"Testing resume…",tip_selftest:"Runs 'claude --version' the way the daemon would — verifies the daemon can find & run claude (no resume, no quota)."},
   vi:{sub:"tự tiếp tục Claude Code khi quota reset",watcher:"Watcher",watching_on:"Đang theo dõi",lastscan:"quét lần cuối",
     next_reset:"Reset kế tiếp",hits7d:"Dính limit · 7 ngày",hits_last:"gần nhất: hôm nay 1:24pm",resumes:"Số lần tự resume",alltime:"từ trước tới nay",
@@ -334,8 +336,10 @@ const I18N={
     configAt:"File cấu hình",reveal:"Hiện",hide:"Ẩn",scanPhone:"Quét để mở trên điện thoại",copy:"Copy",rotated:"Đã tạo token mới",
     tip_settings:"Truy cập dashboard — URL, QR cho điện thoại, và token truy cập.",
     tip_regen:"Tạo token mới. Link cũ và tab đang mở sẽ ngừng hoạt động cho tới khi mở lại bằng URL mới.",
-    activeSessions:"Session đang hoạt động",live:"đang mở",lastActive:"hoạt động",sessionMode:"Chế độ cho session này",modeDefault:"(mặc định)",presetSaved:"Đã lưu cấu hình",
+    activeSessions:"Session đang hoạt động",live:"đang mở",lastActive:"hoạt động",sessionMode:"Chế độ cho session này",modeDefault:"(theo global)",presetSaved:"Đã lưu cấu hình",
     tip_activeSessions:"Các session Claude Code hoạt động trong 24h qua — đặt trước message/mode để khi dính limit nó tự dùng.",
+    tip_sessionMode:"Ghi đè mode riêng cho session này. (theo global) = dùng mode chung ở trên; Tự động/Hỏi/Tắt = ép mode đó chỉ cho session này.",
+    tip_modeDefault:"Theo mode global ở trên — không ghi đè riêng session này.",
     debug:"Debug",selftest:"Tự kiểm tra claude",testResume:"Test resume",testResuming:"Đang test resume…",tip_selftest:"Chạy 'claude --version' đúng cách daemon gọi — kiểm tra daemon có tìm & chạy được claude (không resume, không tốn quota)."}
 };
 let lang=localStorage.getItem('cc-lang')||'vi';
